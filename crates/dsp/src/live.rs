@@ -144,6 +144,7 @@ impl Runner {
 mod tests {
     use super::*;
     use crate::fx::Kind;
+    use crate::library::Library;
     use crate::rig::{Rig, Slot};
     use assert_no_alloc::assert_no_alloc;
 
@@ -160,10 +161,15 @@ mod tests {
 
         #[test]
         fn processes_and_swaps_without_allocating() {
-            let (mut runner, mut remote) = live(Chain::build(&rig(), RATE));
+            let (mut runner, mut remote) =
+                live(Chain::build(&rig(), RATE, &mut Library::default()));
             let input: Vec<f32> = (0..256).map(|i| (i as f32 * 0.05).sin() * 0.3).collect();
             let mut out = vec![[0.0f32; 2]; 256];
-            remote.send(Command::Swap(Box::new(Chain::build(&rig(), RATE))));
+            remote.send(Command::Swap(Box::new(Chain::build(
+                &rig(),
+                RATE,
+                &mut Library::default(),
+            ))));
             remote.send(Command::Set {
                 target: Target::Pre(0),
                 param: 0,
@@ -182,7 +188,8 @@ mod tests {
 
         #[test]
         fn mutes_the_output_for_the_tuner() {
-            let (mut runner, mut remote) = live(Chain::build(&rig(), RATE));
+            let (mut runner, mut remote) =
+                live(Chain::build(&rig(), RATE, &mut Library::default()));
             remote.send(Command::Mute(true));
             let input = vec![0.5f32; 64];
             let mut out = vec![[1.0f32; 2]; 64];

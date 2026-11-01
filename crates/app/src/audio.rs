@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{FromSample, SizedSample};
-use riff_dsp::{Chain, Remote, Rig, Runner, live};
+use riff_dsp::{Chain, Remote, Runner, live};
 use rtrb::{Consumer, Producer, RingBuffer};
 
 use crate::settings::Settings;
@@ -133,7 +133,7 @@ fn pick(
     Ok((best.sample_format(), best.channels() as usize))
 }
 
-pub fn start(settings: &Settings, rig: &Rig) -> Result<Audio, String> {
+pub fn start(settings: &Settings, build: impl FnOnce(f32) -> Chain) -> Result<Audio, String> {
     let rate = settings.rate;
     let in_dev = find(settings.input.as_deref(), true).ok_or("no input device")?;
     let out_dev = find(settings.output.as_deref(), false).ok_or("no output device")?;
@@ -152,7 +152,7 @@ pub fn start(settings: &Settings, rig: &Rig) -> Result<Audio, String> {
         buffer_size: buffer,
     };
     let (producer, consumer) = RingBuffer::new(rate as usize);
-    let (runner, remote) = live(Chain::build(rig, rate as f32));
+    let (runner, remote) = live(build(rate as f32));
     let dropouts = Arc::new(AtomicU32::new(0));
     let input = match in_fmt {
         cpal::SampleFormat::F32 => build_input::<f32>(&in_dev, &in_config, producer, channel),

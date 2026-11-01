@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::amp::{self, AmpModel};
+use crate::cab::CabState;
 use crate::fx::Kind;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -119,6 +120,7 @@ pub struct Rig {
     pub gate: GateState,
     pub pre: Vec<Slot>,
     pub amp: AmpState,
+    pub cab: CabState,
     pub post: Vec<Slot>,
 }
 
@@ -132,6 +134,7 @@ impl Default for Rig {
             gate: GateState::default(),
             pre: Vec::new(),
             amp: AmpState::default(),
+            cab: CabState::default(),
             post: Vec::new(),
         }
     }
@@ -147,6 +150,7 @@ impl Rig {
             s.fix();
         }
         self.amp.fix();
+        self.cab.fix();
         self.input = self.input.clamp(-24.0, 24.0);
         self.output = self.output.clamp(-60.0, 12.0);
     }

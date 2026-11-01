@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
 
 use riff_dsp::tuner::{self, Reading};
-use riff_dsp::{Chain, Command, Rig, Target};
+use riff_dsp::{Chain, Command, Library, Rig, Target};
 
 use crate::audio::{self, Audio};
 use crate::settings::{self, Settings};
@@ -13,6 +13,8 @@ const METER_FALL: f32 = 0.85;
 pub struct App {
     pub settings: Settings,
     pub rig: Rig,
+    pub library: Library,
+    pub warnings: Vec<String>,
     pub audio: Option<Audio>,
     pub error: Option<String>,
     pub setup: bool,
@@ -32,6 +34,8 @@ impl App {
         let mut app = Self {
             settings,
             rig,
+            library: Library::default(),
+            warnings: Vec::new(),
             audio: None,
             error: None,
             setup: false,
@@ -49,7 +53,15 @@ impl App {
 
     pub fn restart(&mut self) {
         self.audio = None;
-        match audio::start(&self.settings, &self.rig) {
+        let (rig, library) = (&self.rig, &mut self.library);
+        let mut warnings = Vec::new();
+        let result = audio::start(&self.settings, |rate| {
+            let chain = Chain::build(rig, rate, library);
+            warnings = chain.warnings().to_vec();
+            chain
+        });
+        self.warnings = warnings;
+        match result {
             Ok(a) => {
                 self.audio = Some(a);
                 self.error = None;
@@ -70,7 +82,8 @@ impl App {
     pub fn rebuild(&mut self) {
         self.rig.fix();
         if let Some(a) = self.audio.as_mut() {
-            let chain = Chain::build(&self.rig, a.rate as f32);
+            let chain = Chain::build(&self.rig, a.rate as f32, &mut self.library);
+            self.warnings = chain.warnings().to_vec();
             a.remote.send(Command::Swap(Box::new(chain)));
         }
     }

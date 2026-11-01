@@ -1,6 +1,8 @@
 use crate::amp::Amp;
+use crate::cab::Cab;
 use crate::fx::{Mono, Stereo};
 use crate::gate::Gate;
+use crate::library::Library;
 use crate::rig::Rig;
 use crate::util::{DcBlock, Smooth, db};
 
@@ -45,11 +47,14 @@ pub struct Chain {
     gate_wet: Smooth,
     pre: Vec<Unit<dyn Mono>>,
     amp: Unit<dyn Mono>,
+    cab: Cab,
+    cab_wet: Smooth,
     post: Vec<Unit<dyn Stereo>>,
+    warnings: Vec<String>,
 }
 
 impl Chain {
-    pub fn build(rig: &Rig, rate: f32) -> Self {
+    pub fn build(rig: &Rig, rate: f32, library: &mut Library) -> Self {
         let mut rig = rig.clone();
         rig.fix();
         let pre = rig
@@ -83,8 +88,21 @@ impl Chain {
                 rig.amp.on,
                 rate,
             ),
+            cab: Cab::new(&rig.cab, rate, library),
+            cab_wet: Smooth::new(if rig.cab.on { 1.0 } else { 0.0 }, FADE_MS, rate),
             post,
+            warnings: Vec::new(),
         }
+        .with_warnings()
+    }
+
+    fn with_warnings(mut self) -> Self {
+        self.warnings = std::mem::take(&mut self.cab.warnings);
+        self
+    }
+
+    pub fn warnings(&self) -> &[String] {
+        &self.warnings
     }
 
     pub fn rate(&self) -> f32 {
@@ -110,7 +128,7 @@ impl Chain {
                 }
             }
             Target::Amp => self.amp.fx.set(param, value),
-            Target::Cab => {}
+            Target::Cab => self.cab.set(param, value),
         }
     }
 
@@ -129,6 +147,7 @@ impl Chain {
                 }
             }
             Target::Amp => self.amp.wet.set(v),
+            Target::Cab => self.cab_wet.set(v),
             _ => {}
         }
     }
@@ -161,6 +180,11 @@ impl Chain {
         if aw > SILENT || !self.amp.bypassed() {
             let y = self.amp.fx.process(m);
             m += (y - m) * aw;
+        }
+        let cw = self.cab_wet.tick();
+        if cw > SILENT || self.cab_wet.target() > 0.0 {
+            let y = self.cab.process(m);
+            m += (y - m) * cw;
         }
         let mut s = [m, m];
         for u in &mut self.post {
@@ -217,7 +241,8 @@ mod tests {
                 ..Rig::default()
             };
             rig.amp.on = false;
-            let mut c = Chain::build(&rig, RATE);
+            rig.cab.on = false;
+            let mut c = Chain::build(&rig, RATE, &mut Library::default());
             assert!((peak(&mut c, 9600) - 0.2).abs() < 0.01);
         }
 
@@ -228,8 +253,9 @@ mod tests {
                 ..Rig::default()
             };
             rig.amp.on = false;
+            rig.cab.on = false;
             rig.pre.push(Slot::with(Kind::Boost, &[("LEVEL", 6.0)]));
-            let mut c = Chain::build(&rig, RATE);
+            let mut c = Chain::build(&rig, RATE, &mut Library::default());
             assert!((peak(&mut c, 9600) - 0.4).abs() < 0.02);
             c.enable(Target::Pre(0), false);
             assert!((peak(&mut c, 9600) - 0.2).abs() < 0.01);
@@ -242,7 +268,7 @@ mod tests {
                 input: 24.0,
                 ..Rig::default()
             };
-            let mut c = Chain::build(&rig, RATE);
+            let mut c = Chain::build(&rig, RATE, &mut Library::default());
             for i in 0..4800 {
                 let x = tone(i) * 4.0 * c.input_gain();
                 let [l, r] = c.process(x);
