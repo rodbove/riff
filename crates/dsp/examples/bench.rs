@@ -17,6 +17,11 @@ fn main() {
             sink += chain.process(*x)[0];
         }
         let used = start.elapsed().as_secs_f32() / seconds;
-        println!("{:<20} {:>5.1}% of one core {}", rig.name, used * 100.0, if sink.is_nan() { "nan" } else { "" });
+        println!(
+            "{:<20} {:>5.1}% of one core {}",
+            rig.name,
+            used * 100.0,
+            if sink.is_nan() { "nan" } else { "" }
+        );
     }
 }

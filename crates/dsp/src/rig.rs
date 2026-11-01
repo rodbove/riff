@@ -125,6 +125,8 @@ pub const MAX_POST: usize = 6;
 pub struct Rig {
     pub name: String,
     pub category: String,
+    pub album: String,
+    pub note: String,
     pub input: f32,
     pub output: f32,
     pub gate: GateState,
@@ -139,6 +141,8 @@ impl Default for Rig {
         Self {
             name: "Init".into(),
             category: "USER".into(),
+            album: String::new(),
+            note: String::new(),
             input: 0.0,
             output: -6.0,
             gate: GateState::default(),

@@ -3,6 +3,7 @@ pub mod dynamics;
 pub mod filter;
 pub mod line;
 pub mod modulation;
+pub mod pitch;
 pub mod time;
 
 use serde::{Deserialize, Serialize};
@@ -29,6 +30,8 @@ pub enum Kind {
     Wah,
     Eq,
     Octaver,
+    Tune,
+    Acoustic,
     Chorus,
     Phaser,
     Flanger,
@@ -36,6 +39,8 @@ pub enum Kind {
     Reverb,
     Doubler,
     PostEq,
+    Harmony,
+    Tremolo,
 }
 
 pub struct Spec {
@@ -105,6 +110,37 @@ const OCTAVER: &[Param] = &[
     Param::new("DRY", 0.0, 1.0, 1.0, Unit::Percent),
 ];
 
+const TUNE: &[Param] = &[
+    Param::new("SHIFT", -12.0, 12.0, -2.0, Unit::Semi),
+    Param::new("MIX", 0.0, 1.0, 1.0, Unit::Percent),
+];
+
+const ACOUSTIC: &[Param] = &[
+    Param::knob("BODY", 5.0),
+    Param::knob("TOP", 5.0),
+    Param::new("LEVEL", -12.0, 12.0, 0.0, Unit::Db),
+];
+
+const HARMONY: &[Param] = &[
+    Param::choice(
+        "INTERVAL",
+        &[
+            "-OCT", "-5TH", "-4TH", "-m3", "+m3", "+M3", "+4TH", "+5TH", "+OCT",
+        ],
+        5.0,
+    ),
+    Param::new("MIX", 0.0, 1.0, 0.7, Unit::Percent),
+    Param::new("WIDTH", 0.0, 1.0, 0.8, Unit::Percent),
+    Param::new("DELAY", 0.0, 40.0, 15.0, Unit::Ms),
+];
+
+const TREMOLO: &[Param] = &[
+    Param::new("RATE", 0.5, 12.0, 5.0, Unit::Hz).curved(2.0),
+    Param::new("DEPTH", 0.0, 1.0, 0.6, Unit::Percent),
+    Param::choice("SHAPE", &["SINE", "SQUARE"], 0.0),
+    Param::new("STEREO", 0.0, 1.0, 0.0, Unit::Percent),
+];
+
 const CHORUS: &[Param] = &[
     Param::new("RATE", 0.1, 5.0, 0.8, Unit::Hz).curved(2.0),
     Param::new("DEPTH", 0.0, 1.0, 0.5, Unit::Percent),
@@ -172,6 +208,8 @@ impl Kind {
         Kind::Wah,
         Kind::Eq,
         Kind::Octaver,
+        Kind::Tune,
+        Kind::Acoustic,
     ];
     pub const POST: &'static [Kind] = &[
         Kind::Chorus,
@@ -181,6 +219,8 @@ impl Kind {
         Kind::Reverb,
         Kind::Doubler,
         Kind::PostEq,
+        Kind::Harmony,
+        Kind::Tremolo,
     ];
 
     pub fn spec(self) -> Spec {
@@ -211,6 +251,28 @@ impl Kind {
             Kind::Wah => spec("WAH", "cry baby style", [0x30, 0x30, 0x30], false, WAH),
             Kind::Eq => spec("EQ-10", "10 band graphic eq", [0xc8, 0xc8, 0xc8], false, EQ),
             Kind::Octaver => spec("OCTAVE", "octave down", [0x7a, 0x3d, 0xb8], false, OCTAVER),
+            Kind::Tune => spec(
+                "TUNE",
+                "pitch shift and drop tune",
+                [0x5a, 0x2d, 0x82],
+                false,
+                TUNE,
+            ),
+            Kind::Acoustic => spec(
+                "ACOUSTIC",
+                "acoustic guitar simulator",
+                [0xb8, 0x86, 0x4b],
+                false,
+                ACOUSTIC,
+            ),
+            Kind::Harmony => spec(
+                "HARMONY",
+                "twin lead harmonizer",
+                [0x1f, 0x6f, 0x6a],
+                true,
+                HARMONY,
+            ),
+            Kind::Tremolo => spec("TREM", "tremolo", [0x8c, 0x23, 0x2a], true, TREMOLO),
             Kind::Chorus => spec("CHORUS", "stereo chorus", [0x4a, 0xa8, 0xd8], true, CHORUS),
             Kind::Phaser => spec("PHASE", "6 stage phaser", [0xf0, 0x8c, 0x1c], true, PHASER),
             Kind::Flanger => spec("FLANGE", "flanger", [0x8a, 0x8a, 0x9a], true, FLANGER),
@@ -241,6 +303,8 @@ impl Kind {
             Kind::Wah => Box::new(filter::Wah::new(rate)),
             Kind::Eq => Box::new(filter::Eq::new(rate)),
             Kind::Octaver => Box::new(filter::Octaver::new(rate)),
+            Kind::Tune => Box::new(pitch::Tune::new(rate)),
+            Kind::Acoustic => Box::new(pitch::Acoustic::new(rate)),
             _ => return None,
         };
         for (i, p) in self.spec().params.iter().enumerate() {
@@ -258,6 +322,8 @@ impl Kind {
             Kind::Reverb => Box::new(time::Reverb::new(rate)),
             Kind::Doubler => Box::new(modulation::Doubler::new(rate)),
             Kind::PostEq => Box::new(PostEq(filter::Eq::new(rate))),
+            Kind::Harmony => Box::new(pitch::Harmony::new(rate)),
+            Kind::Tremolo => Box::new(pitch::Tremolo::new(rate)),
             _ => return None,
         };
         for (i, p) in self.spec().params.iter().enumerate() {

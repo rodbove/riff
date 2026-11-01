@@ -5,6 +5,7 @@ pub enum Unit {
     Ms,
     Hz,
     Plain,
+    Semi,
     Choice(&'static [&'static str]),
 }
 
@@ -54,7 +55,7 @@ impl Param {
 
     pub fn clamp(&self, v: f32) -> f32 {
         let v = v.clamp(self.min, self.max);
-        if matches!(self.unit, Unit::Choice(_)) {
+        if matches!(self.unit, Unit::Choice(_) | Unit::Semi) {
             v.round()
         } else {
             v
@@ -89,6 +90,7 @@ impl Param {
                 }
             }
             Unit::Plain => format!("{v:.1}"),
+            Unit::Semi => format!("{v:+.0} st"),
             Unit::Choice(options) => {
                 options[(v.round().max(0.0) as usize).min(options.len() - 1)].into()
             }

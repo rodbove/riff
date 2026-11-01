@@ -238,3 +238,77 @@ mod when_widening {
         }
     }
 }
+
+mod when_shifting_pitch {
+    use super::*;
+
+    fn strongest(v: &[f32]) -> f32 {
+        let power = |hz: f32| {
+            let (mut re, mut im) = (0.0f64, 0.0f64);
+            for (n, x) in v.iter().enumerate() {
+                let w = std::f64::consts::TAU * hz as f64 * n as f64 / RATE as f64;
+                re += *x as f64 * w.cos();
+                im += *x as f64 * w.sin();
+            }
+            re * re + im * im
+        };
+        (500..6000)
+            .map(|i| i as f32 * 0.1)
+            .max_by(|a, b| power(*a).total_cmp(&power(*b)))
+            .unwrap()
+    }
+
+    #[test]
+    fn the_tune_pedal_moves_a_note_down() {
+        for (shift, expected) in [(-12.0, 100.0), (-2.0, 178.18), (5.0, 266.97)] {
+            let out = run_mono(
+                Kind::Tune,
+                &with(Kind::Tune, &[("SHIFT", shift)]),
+                &sine(200.0, 0.3, 24000),
+            );
+            let hz = strongest(&out[12000..24000]);
+            assert!((hz / expected - 1.0).abs() < 0.03, "{shift}: {hz}");
+        }
+    }
+
+    #[test]
+    fn the_harmony_adds_a_second_voice() {
+        let input = sine(200.0, 0.3, 24000);
+        let out = run_stereo(
+            Kind::Harmony,
+            &with(
+                Kind::Harmony,
+                &[("INTERVAL", 8.0), ("MIX", 1.0), ("WIDTH", 1.0)],
+            ),
+            &input,
+        );
+        let right: Vec<f32> = out.iter().map(|f| f[1] - 0.0).collect();
+        let left: Vec<f32> = out.iter().map(|f| f[0]).collect();
+        let diff: Vec<f32> = right.iter().zip(&left).map(|(r, l)| r - l).collect();
+        let hz = strongest(&diff[12000..24000]);
+        assert!((hz / 400.0 - 1.0).abs() < 0.03, "{hz}");
+    }
+}
+
+mod when_pulsing {
+    use super::*;
+
+    #[test]
+    fn the_tremolo_moves_the_volume_at_its_rate() {
+        let input = vec![0.5f32; 48000];
+        let out = run_stereo(
+            Kind::Tremolo,
+            &with(Kind::Tremolo, &[("RATE", 4.0), ("DEPTH", 1.0)]),
+            &input,
+        );
+        let levels: Vec<f32> = out.iter().map(|f| f[0]).collect();
+        let low = levels.iter().cloned().fold(1.0, f32::min);
+        let high = levels.iter().cloned().fold(0.0, f32::max);
+        assert!(low < 0.05 && high > 0.45);
+        let dips = levels
+            .windows(2)
+            .filter(|w| w[0] >= 0.25 && w[1] < 0.25)
+            .count();
+        assert_eq!(dips, 4);
+    }
+}
