@@ -1,0 +1,18 @@
+[package]
+name = "riff-app"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "riff"
+path = "src/main.rs"
+
+[dependencies]
+riff-dsp = { path = "../dsp" }
+eframe = "0.37"
+cpal = "0.18"
+midir = "0.11"
+rfd = "0.17"
+rtrb = "0.4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
