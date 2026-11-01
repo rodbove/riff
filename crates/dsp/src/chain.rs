@@ -1,3 +1,4 @@
+use crate::amp::Amp;
 use crate::fx::{Mono, Stereo};
 use crate::gate::Gate;
 use crate::rig::Rig;
@@ -43,6 +44,7 @@ pub struct Chain {
     gate: Gate,
     gate_wet: Smooth,
     pre: Vec<Unit<dyn Mono>>,
+    amp: Unit<dyn Mono>,
     post: Vec<Unit<dyn Stereo>>,
 }
 
@@ -76,6 +78,11 @@ impl Chain {
             gate: Gate::new(rig.gate.threshold, rig.gate.release, rate),
             gate_wet: Smooth::new(if rig.gate.on { 1.0 } else { 0.0 }, FADE_MS, rate),
             pre,
+            amp: Unit::new(
+                Box::new(Amp::new(rig.amp.model, &rig.amp.values, rate)),
+                rig.amp.on,
+                rate,
+            ),
             post,
         }
     }
@@ -102,7 +109,8 @@ impl Chain {
                     u.fx.set(param, value);
                 }
             }
-            Target::Amp | Target::Cab => {}
+            Target::Amp => self.amp.fx.set(param, value),
+            Target::Cab => {}
         }
     }
 
@@ -120,6 +128,7 @@ impl Chain {
                     u.wet.set(v);
                 }
             }
+            Target::Amp => self.amp.wet.set(v),
             _ => {}
         }
     }
@@ -147,6 +156,11 @@ impl Chain {
         if gw > SILENT || self.gate_wet.target() > 0.0 {
             let g = self.gate.process(key, m);
             m += (g - m) * gw;
+        }
+        let aw = self.amp.wet.tick();
+        if aw > SILENT || !self.amp.bypassed() {
+            let y = self.amp.fx.process(m);
+            m += (y - m) * aw;
         }
         let mut s = [m, m];
         for u in &mut self.post {
@@ -198,10 +212,11 @@ mod tests {
 
         #[test]
         fn passes_a_clean_signal_at_the_output_level() {
-            let rig = Rig {
+            let mut rig = Rig {
                 output: 0.0,
                 ..Rig::default()
             };
+            rig.amp.on = false;
             let mut c = Chain::build(&rig, RATE);
             assert!((peak(&mut c, 9600) - 0.2).abs() < 0.01);
         }
@@ -212,6 +227,7 @@ mod tests {
                 output: 0.0,
                 ..Rig::default()
             };
+            rig.amp.on = false;
             rig.pre.push(Slot::with(Kind::Boost, &[("LEVEL", 6.0)]));
             let mut c = Chain::build(&rig, RATE);
             assert!((peak(&mut c, 9600) - 0.4).abs() < 0.02);

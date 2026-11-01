@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+use crate::amp::{self, AmpModel};
 use crate::fx::Kind;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -70,6 +71,41 @@ impl Slot {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct AmpState {
+    pub on: bool,
+    pub model: AmpModel,
+    pub values: Vec<f32>,
+}
+
+impl Default for AmpState {
+    fn default() -> Self {
+        Self {
+            on: true,
+            model: AmpModel::Brit,
+            values: amp::PARAMS.iter().map(|p| p.default).collect(),
+        }
+    }
+}
+
+impl AmpState {
+    pub fn with(model: AmpModel, values: [f32; 8]) -> Self {
+        Self {
+            on: true,
+            model,
+            values: values.to_vec(),
+        }
+    }
+
+    pub fn fix(&mut self) {
+        self.values.resize(amp::PARAMS.len(), 0.0);
+        for (v, p) in self.values.iter_mut().zip(amp::PARAMS) {
+            *v = p.clamp(*v);
+        }
+    }
+}
+
 pub const MAX_PRE: usize = 8;
 pub const MAX_POST: usize = 6;
 
@@ -82,6 +118,7 @@ pub struct Rig {
     pub output: f32,
     pub gate: GateState,
     pub pre: Vec<Slot>,
+    pub amp: AmpState,
     pub post: Vec<Slot>,
 }
 
@@ -94,6 +131,7 @@ impl Default for Rig {
             output: -6.0,
             gate: GateState::default(),
             pre: Vec::new(),
+            amp: AmpState::default(),
             post: Vec::new(),
         }
     }
@@ -108,6 +146,7 @@ impl Rig {
         for s in self.pre.iter_mut().chain(self.post.iter_mut()) {
             s.fix();
         }
+        self.amp.fix();
         self.input = self.input.clamp(-24.0, 24.0);
         self.output = self.output.clamp(-60.0, 12.0);
     }
