@@ -11,6 +11,7 @@ pub mod live;
 pub mod nam;
 pub mod oversample;
 pub mod param;
+pub mod preset;
 pub mod rig;
 pub mod tuner;
 pub mod util;
