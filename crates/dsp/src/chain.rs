@@ -3,6 +3,7 @@ use crate::cab::Cab;
 use crate::fx::{Mono, Stereo};
 use crate::gate::Gate;
 use crate::library::Library;
+use crate::nam::NamAmp;
 use crate::rig::Rig;
 use crate::util::{DcBlock, Smooth, db};
 
@@ -57,6 +58,7 @@ impl Chain {
     pub fn build(rig: &Rig, rate: f32, library: &mut Library) -> Self {
         let mut rig = rig.clone();
         rig.fix();
+        let mut warnings = Vec::new();
         let pre = rig
             .pre
             .iter()
@@ -84,20 +86,21 @@ impl Chain {
             gate_wet: Smooth::new(if rig.gate.on { 1.0 } else { 0.0 }, FADE_MS, rate),
             pre,
             amp: Unit::new(
-                Box::new(Amp::new(rig.amp.model, &rig.amp.values, rate)),
+                build_amp(&rig, rate, library, &mut warnings),
                 rig.amp.on,
                 rate,
             ),
             cab: Cab::new(&rig.cab, rate, library),
             cab_wet: Smooth::new(if rig.cab.on { 1.0 } else { 0.0 }, FADE_MS, rate),
             post,
-            warnings: Vec::new(),
+            warnings,
         }
         .with_warnings()
     }
 
     fn with_warnings(mut self) -> Self {
-        self.warnings = std::mem::take(&mut self.cab.warnings);
+        let cab = std::mem::take(&mut self.cab.warnings);
+        self.warnings.extend(cab);
         self
     }
 
@@ -198,6 +201,32 @@ impl Chain {
         let out = self.output.tick();
         [limit(s[0] * out), limit(s[1] * out)]
     }
+}
+
+fn build_amp(
+    rig: &Rig,
+    rate: f32,
+    library: &mut Library,
+    warnings: &mut Vec<String>,
+) -> Box<dyn Mono> {
+    if rig.amp.use_nam
+        && let Some(path) = &rig.amp.nam
+    {
+        match NamAmp::new(
+            std::path::Path::new(path),
+            &rig.amp.nam_values,
+            rate,
+            library,
+            warnings,
+        ) {
+            Ok(amp) => return Box::new(amp),
+            Err(e) => warnings.push(format!(
+                "{path}: {e}. Using the {} model.",
+                rig.amp.model.voicing().name
+            )),
+        }
+    }
+    Box::new(Amp::new(rig.amp.model, &rig.amp.values, rate))
 }
 
 pub fn limit(x: f32) -> f32 {

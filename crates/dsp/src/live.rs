@@ -187,6 +187,28 @@ mod tests {
         }
 
         #[test]
+        fn runs_a_nam_capture_without_allocating() {
+            let dir = std::env::temp_dir().join(format!("riff-live-nam-{}", std::process::id()));
+            std::fs::create_dir_all(&dir).unwrap();
+            let path = dir.join("tiny.nam");
+            std::fs::write(&path, crate::nam::TINY_LSTM).unwrap();
+            let mut rig = rig();
+            rig.amp.use_nam = true;
+            rig.amp.nam = Some(path.to_string_lossy().to_string());
+            let chain = Chain::build(&rig, RATE, &mut Library::default());
+            assert!(chain.warnings().is_empty(), "{:?}", chain.warnings());
+            let (mut runner, _remote) = live(chain);
+            let input: Vec<f32> = (0..256).map(|i| (i as f32 * 0.05).sin() * 0.3).collect();
+            let mut out = vec![[0.0f32; 2]; 256];
+            assert_no_alloc(|| {
+                for _ in 0..20 {
+                    runner.process(&input, &mut out);
+                }
+            });
+            assert!(out.iter().all(|f| f[0].is_finite()));
+        }
+
+        #[test]
         fn mutes_the_output_for_the_tuner() {
             let (mut runner, mut remote) =
                 live(Chain::build(&rig(), RATE, &mut Library::default()));

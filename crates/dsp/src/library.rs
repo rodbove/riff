@@ -2,11 +2,14 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use nam_rs::NamModel;
+
 pub const IR_SECONDS: f32 = 0.5;
 
 #[derive(Default)]
 pub struct Library {
     irs: HashMap<(PathBuf, u32), Arc<[f32]>>,
+    pub(crate) nams: HashMap<PathBuf, Arc<NamModel>>,
 }
 
 impl Library {

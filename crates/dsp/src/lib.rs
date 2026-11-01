@@ -8,6 +8,7 @@ pub mod fx;
 pub mod gate;
 pub mod library;
 pub mod live;
+pub mod nam;
 pub mod oversample;
 pub mod param;
 pub mod rig;

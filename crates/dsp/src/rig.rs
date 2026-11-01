@@ -78,6 +78,9 @@ pub struct AmpState {
     pub on: bool,
     pub model: AmpModel,
     pub values: Vec<f32>,
+    pub use_nam: bool,
+    pub nam: Option<String>,
+    pub nam_values: Vec<f32>,
 }
 
 impl Default for AmpState {
@@ -86,6 +89,9 @@ impl Default for AmpState {
             on: true,
             model: AmpModel::Brit,
             values: amp::PARAMS.iter().map(|p| p.default).collect(),
+            use_nam: false,
+            nam: None,
+            nam_values: crate::nam::PARAMS.iter().map(|p| p.default).collect(),
         }
     }
 }
@@ -93,15 +99,19 @@ impl Default for AmpState {
 impl AmpState {
     pub fn with(model: AmpModel, values: [f32; 8]) -> Self {
         Self {
-            on: true,
             model,
             values: values.to_vec(),
+            ..Self::default()
         }
     }
 
     pub fn fix(&mut self) {
         self.values.resize(amp::PARAMS.len(), 0.0);
         for (v, p) in self.values.iter_mut().zip(amp::PARAMS) {
+            *v = p.clamp(*v);
+        }
+        self.nam_values.resize(crate::nam::PARAMS.len(), 0.0);
+        for (v, p) in self.nam_values.iter_mut().zip(crate::nam::PARAMS) {
             *v = p.clamp(*v);
         }
     }
