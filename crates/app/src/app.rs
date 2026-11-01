@@ -1,9 +1,12 @@
 use std::collections::VecDeque;
 
+use riff_dsp::fx::Kind;
 use riff_dsp::tuner::{self, Reading};
 use riff_dsp::{Chain, Command, Library, Rig, Target};
 
 use crate::audio::{self, Audio};
+use crate::midi::{self, Midi};
+use crate::presets::{self, Bank};
 use crate::settings::{self, Settings};
 
 const TUNER_WINDOW: usize = 4096;
@@ -18,6 +21,12 @@ pub struct App {
     pub audio: Option<Audio>,
     pub error: Option<String>,
     pub setup: bool,
+    pub bank: Bank,
+    pub preset: Option<usize>,
+    pub compare: Option<Rig>,
+    pub midi: Midi,
+    pub toast: Option<(String, f64)>,
+    pub now: f64,
     pub tuner_on: bool,
     pub reading: Option<Reading>,
     pub meter_in: f32,
@@ -39,6 +48,12 @@ impl App {
             audio: None,
             error: None,
             setup: false,
+            bank: Bank::load(),
+            preset: None,
+            compare: None,
+            midi: Midi::default(),
+            toast: None,
+            now: 0.0,
             tuner_on: false,
             reading: None,
             meter_in: 0.0,
@@ -48,7 +63,97 @@ impl App {
             last_tuned: 0.0,
         };
         app.restart();
+        let port = app
+            .settings
+            .midi
+            .clone()
+            .or_else(|| midi::ports().into_iter().next());
+        if let Some(p) = port {
+            let _ = app.midi.connect(&p, || {});
+        }
         app
+    }
+
+    pub fn say(&mut self, text: impl Into<String>) {
+        self.toast = Some((text.into(), self.now + 2.5));
+    }
+
+    pub fn load_rig(&mut self, rig: Rig) {
+        self.rig = rig;
+        self.rig.fix();
+        self.compare = None;
+        self.rebuild();
+    }
+
+    pub fn load_preset(&mut self, index: usize) {
+        if let Some(rig) = self.bank.items.get(index).cloned() {
+            self.preset = Some(index);
+            let name = rig.name.clone();
+            self.load_rig(rig);
+            self.say(name);
+        }
+    }
+
+    pub fn step_preset(&mut self, delta: i32) {
+        let n = self.bank.items.len() as i32;
+        if n == 0 {
+            return;
+        }
+        let at = self.preset.map(|p| p as i32).unwrap_or(-1);
+        self.load_preset((at + delta).rem_euclid(n) as usize);
+    }
+
+    pub fn save_preset(&mut self, name: &str) {
+        let name = name.trim();
+        if name.is_empty() {
+            return;
+        }
+        let mut rig = self.rig.clone();
+        rig.name = name.to_string();
+        rig.category = riff_dsp::preset::USER.into();
+        match presets::save(&rig) {
+            Ok(_) => {
+                self.rig = rig.clone();
+                self.preset = Some(self.bank.add(rig));
+                self.say(format!("saved {name}"));
+            }
+            Err(e) => self.say(format!("could not save: {e}")),
+        }
+    }
+
+    pub fn toggle_compare(&mut self) {
+        match self.compare.take() {
+            None => {
+                self.compare = Some(self.rig.clone());
+                self.say("A stored. Change the tone, then press A/B to compare.");
+            }
+            Some(mut other) => {
+                std::mem::swap(&mut self.rig, &mut other);
+                self.compare = Some(other);
+                self.rebuild();
+                self.say("switched");
+            }
+        }
+    }
+
+    fn midi(&mut self) {
+        for event in self.midi.poll() {
+            match event {
+                midi::Event::Program(n) => {
+                    if !self.bank.items.is_empty() {
+                        self.load_preset(n as usize % self.bank.items.len());
+                    }
+                }
+                midi::Event::Control { cc, value } if cc == midi::EXPRESSION => {
+                    let v = value as f32 / 127.0;
+                    if let Some(i) = self.rig.pre.iter().position(|s| s.kind == Kind::Wah) {
+                        self.rig.pre[i].values[0] = v;
+                        self.set(Target::Pre(i), 0, v);
+                    }
+                }
+                _ => {}
+            }
+        }
     }
 
     pub fn restart(&mut self) {
@@ -110,6 +215,11 @@ impl App {
     }
 
     pub fn tick(&mut self, now: f64) {
+        self.now = now;
+        if self.toast.as_ref().is_some_and(|(_, until)| now > *until) {
+            self.toast = None;
+        }
+        self.midi();
         let Some(a) = self.audio.as_mut() else {
             return;
         };

@@ -46,6 +46,10 @@ pub fn config_dir() -> PathBuf {
     }
 }
 
+pub fn library() -> PathBuf {
+    home().join("Music/riff")
+}
+
 impl Settings {
     pub fn load() -> Self {
         std::fs::read_to_string(config_dir().join("settings.json"))
