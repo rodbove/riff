@@ -1,6 +1,7 @@
 [workspace]
 resolver = "3"
-members = ["crates/dsp", "crates/app"]
+members = ["crates/dsp", "crates/app", "crates/plugin", "xtask"]
+default-members = ["crates/dsp", "crates/app"]
 
 [workspace.package]
 version = "0.1.0"

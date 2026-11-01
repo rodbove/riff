@@ -104,6 +104,10 @@ impl Runner {
         }
     }
 
+    pub fn apply(&mut self, target: Target, param: usize, value: f32) {
+        self.chain.set(target, param, value);
+    }
+
     pub fn process(&mut self, input: &[f32], out: &mut [[f32; 2]]) {
         if let Some(old) = self.spare.take() {
             self.discard(old);
