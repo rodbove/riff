@@ -3,7 +3,6 @@ use crate::egui::Color32;
 pub const BACKDROP: Color32 = Color32::from_rgb(0x16, 0x16, 0x15);
 pub const PANEL: Color32 = Color32::from_rgb(0x2c, 0x2b, 0x29);
 pub const TOLEX: Color32 = Color32::from_rgb(0x12, 0x12, 0x12);
-pub const PLATE: Color32 = Color32::from_rgb(0xc9, 0xb8, 0x8a);
 pub const PLATE_INK: Color32 = Color32::from_rgb(0x1c, 0x1a, 0x16);
 pub const INK: Color32 = Color32::from_rgb(0xec, 0xea, 0xe4);
 pub const DIM: Color32 = Color32::from_rgb(0x7c, 0x79, 0x72);

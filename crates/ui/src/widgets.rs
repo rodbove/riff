@@ -34,6 +34,21 @@ impl L {
 const DRAG_RANGE: f32 = 180.0;
 const FINE: f32 = 6.0;
 
+#[derive(Clone, Copy)]
+pub struct KnobLook {
+    pub body: Color32,
+    pub cap: Color32,
+    pub pointer: Color32,
+    pub skirt: Option<Color32>,
+}
+
+pub const DARK_KNOB: KnobLook = KnobLook {
+    body: KNOB,
+    cap: Color32::from_rgb(0x2a, 0x2a, 0x2a),
+    pointer: KNOB_CAP,
+    skirt: None,
+};
+
 #[allow(clippy::too_many_arguments)]
 pub fn knob(
     ui: &Ui,
@@ -44,6 +59,21 @@ pub fn knob(
     param: &Param,
     value: f32,
     face: Color32,
+) -> Option<f32> {
+    knob_look(ui, l, id, center, radius, param, value, face, &DARK_KNOB)
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn knob_look(
+    ui: &Ui,
+    l: &L,
+    id: impl std::hash::Hash + std::fmt::Debug,
+    center: Pos2,
+    radius: f32,
+    param: &Param,
+    value: f32,
+    face: Color32,
+    look: &KnobLook,
 ) -> Option<f32> {
     let r = l.s(radius);
     let rect = Rect::from_center_size(center, vec2(r * 2.6, r * 2.6));
@@ -77,35 +107,61 @@ pub fn knob(
     let start = 0.75 * PI;
     let sweep = 1.5 * PI;
     let ink = ink_on(face);
+    let outer = if look.skirt.is_some() {
+        r * 1.22
+    } else {
+        r * 1.04
+    };
     painter.circle_filled(
         center + vec2(0.0, l.s(2.5)),
-        r * 1.04,
+        outer,
         Color32::from_black_alpha(140),
     );
-    painter.circle_filled(center, r, KNOB);
+    if let Some(skirt) = look.skirt {
+        painter.circle_filled(center, r * 1.22, skirt);
+        painter.circle_stroke(
+            center,
+            r * 1.22,
+            Stroke::new(l.s(0.8), mix(skirt, TOLEX, 0.4)),
+        );
+        for t in 0..=10 {
+            let a = start + sweep * t as f32 / 10.0;
+            let dir = vec2(a.cos(), a.sin());
+            painter.line_segment(
+                [center + dir * r * 1.04, center + dir * r * 1.18],
+                Stroke::new(l.s(0.9), mix(skirt, TOLEX, 0.7)),
+            );
+        }
+    }
+    painter.circle_filled(center, r, look.body);
     for t in 0..36 {
         let a = t as f32 / 36.0 * std::f32::consts::TAU;
         let dir = vec2(a.cos(), a.sin());
         painter.line_segment(
             [center + dir * r * 0.86, center + dir * r * 0.99],
-            Stroke::new(l.s(1.1), mix(KNOB, METAL, 0.35)),
+            Stroke::new(l.s(1.1), mix(look.body, METAL, 0.35)),
         );
     }
-    painter.circle_filled(center, r * 0.78, mix(KNOB, METAL, 0.12));
+    painter.circle_filled(center, r * 0.74, look.cap);
+    painter.circle_stroke(
+        center,
+        r * 0.74,
+        Stroke::new(l.s(0.8), mix(look.cap, TOLEX, 0.3)),
+    );
     painter.circle_filled(
-        center - vec2(r * 0.28, r * 0.32),
-        r * 0.3,
-        Color32::from_white_alpha(16),
+        center - vec2(r * 0.26, r * 0.3),
+        r * 0.28,
+        Color32::from_white_alpha(28),
     );
     let a = start + sweep * unit;
-    let tip = center + vec2(a.cos(), a.sin()) * r * 0.8;
+    let tip = center + vec2(a.cos(), a.sin()) * r * 0.92;
     painter.line_segment(
-        [center + vec2(a.cos(), a.sin()) * r * 0.25, tip],
-        Stroke::new(l.s(2.0), KNOB_CAP),
+        [center + vec2(a.cos(), a.sin()) * r * 0.2, tip],
+        Stroke::new(l.s(2.0), look.pointer),
     );
     for t in 0..=10 {
         let a = start + sweep * t as f32 / 10.0;
-        let p = center + vec2(a.cos(), a.sin()) * (r + l.s(4.0));
+        let p = center + vec2(a.cos(), a.sin()) * (outer + l.s(3.0));
         painter.circle_filled(p, l.s(0.9), mix(face, ink, 0.6));
     }
     let active = resp.dragged() || resp.hovered();
@@ -115,7 +171,7 @@ pub fn knob(
         param.name.to_string()
     };
     painter.text(
-        center + vec2(0.0, r + l.s(9.0)),
+        center + vec2(0.0, outer + l.s(8.0)),
         Align2::CENTER_CENTER,
         label,
         l.f(if radius < 12.0 { 7.0 } else { 8.5 }),
@@ -218,7 +274,7 @@ pub fn footswitch(
 
 pub fn meter(ui: &Ui, l: &L, rect: Rect, level: f32, label: &str) {
     let painter = ui.painter();
-    painter.rect_filled(rect, l.s(2.0), TOLEX);
+    painter.rect_filled(rect, l.s(2.0), FAINT);
     let db = 20.0 * level.max(1e-6).log10();
     let t = ((db + 60.0) / 60.0).clamp(0.0, 1.0);
     let mut fill = rect.shrink(l.s(2.0));
@@ -241,14 +297,17 @@ pub fn meter(ui: &Ui, l: &L, rect: Rect, level: f32, label: &str) {
 }
 
 pub fn knob_grid(count: usize, area: Rect, l: &L) -> (Vec<Pos2>, f32) {
-    let (cols, radius) = match count {
+    let (cols, radius): (usize, f32) = match count {
         0..=2 => (count.max(1), 18.0),
         3..=4 => (2, 16.0),
         5..=6 => (2, 13.0),
-        _ => (3, 9.5),
+        7..=9 => (3, 9.5),
+        _ => (4, 8.5),
     };
     let rows = count.div_ceil(cols).max(1);
     let cw = area.width() / cols as f32;
+    let fit = ((area.height() / rows as f32 / l.k - 24.0) / 2.0).max(6.0);
+    let radius = radius.min(fit).min((cw / l.k - 12.0) / 2.6);
     let rh = (area.height() / rows as f32).min(l.s(radius * 2.0 + 30.0));
     let top = area.min.y + (area.height() - rh * rows as f32) / 2.0;
     let points = (0..count)
@@ -417,14 +476,14 @@ pub fn close_button(
 
 pub fn rails(painter: &Painter, l: &L, rect: Rect) {
     painter.rect_filled(rect, l.s(10.0), mix(TOLEX, PANEL, 0.35));
-    let slats = 6;
+    let slats = 5;
     let h = rect.height() / slats as f32;
     for i in 0..slats {
         let slat = Rect::from_min_size(
             pos2(rect.min.x + l.s(6.0), rect.min.y + h * i as f32 + h * 0.18),
-            vec2(rect.width() - l.s(12.0), h * 0.64),
+            vec2(rect.width() - l.s(12.0), h * 0.5),
         );
-        painter.rect_filled(slat, l.s(3.0), mix(METAL, TOLEX, 0.72));
+        painter.rect_filled(slat, l.s(3.0), mix(METAL, TOLEX, 0.86));
         painter.line_segment(
             [
                 slat.left_top() + vec2(l.s(3.0), 0.5),
@@ -461,4 +520,165 @@ pub fn rack_unit(painter: &Painter, l: &L, rect: Rect, face: Color32) {
         }
     }
     bevel(painter, rect, l.s(4.0), false);
+}
+
+pub fn toggle(
+    ui: &Ui,
+    l: &L,
+    id: impl std::hash::Hash + std::fmt::Debug,
+    center: Pos2,
+    on: bool,
+    label: &str,
+    ink: Color32,
+) -> Response {
+    let rect = Rect::from_center_size(center, vec2(l.s(24.0), l.s(34.0)));
+    let resp = ui.interact(rect, Id::NULL.with(id), Sense::click());
+    let painter = ui.painter();
+    painter.circle_filled(
+        center + vec2(0.0, l.s(1.5)),
+        l.s(7.5),
+        Color32::from_black_alpha(110),
+    );
+    painter.circle_filled(center, l.s(7.5), mix(METAL, TOLEX, 0.2));
+    for t in 0..6 {
+        let a = t as f32 / 6.0 * std::f32::consts::TAU;
+        let p = center + vec2(a.cos(), a.sin()) * l.s(7.5);
+        painter.circle_filled(p, l.s(1.2), mix(METAL, TOLEX, 0.35));
+    }
+    painter.circle_filled(center, l.s(4.0), mix(METAL, INK, 0.3));
+    let dir = if on { -1.0 } else { 1.0 };
+    let tip = center + vec2(0.0, dir * l.s(13.0));
+    painter.line_segment(
+        [center, tip],
+        Stroke::new(l.s(4.0), mix(METAL, TOLEX, 0.15)),
+    );
+    painter.circle_filled(tip, l.s(3.2), METAL);
+    painter.circle_filled(
+        tip - vec2(l.s(1.0), l.s(1.0)),
+        l.s(1.0),
+        Color32::from_white_alpha(120),
+    );
+    painter.text(
+        center + vec2(0.0, l.s(24.0)),
+        Align2::CENTER_CENTER,
+        label,
+        l.f(7.0),
+        ink,
+    );
+    resp
+}
+
+pub fn jewel(painter: &Painter, l: &L, center: Pos2, on: bool, color: Color32) {
+    painter.circle_filled(center, l.s(9.0), METAL);
+    painter.circle_stroke(
+        center,
+        l.s(9.0),
+        Stroke::new(l.s(0.8), mix(METAL, TOLEX, 0.5)),
+    );
+    let lens = if on { color } else { mix(color, TOLEX, 0.7) };
+    painter.circle_filled(center, l.s(6.5), lens);
+    for t in 0..8 {
+        let a = t as f32 / 8.0 * std::f32::consts::TAU;
+        let d = vec2(a.cos(), a.sin());
+        painter.line_segment(
+            [center + d * l.s(2.0), center + d * l.s(6.3)],
+            Stroke::new(l.s(0.6), mix(lens, TOLEX, 0.35)),
+        );
+    }
+    painter.circle_filled(
+        center - vec2(l.s(2.0), l.s(2.0)),
+        l.s(1.6),
+        Color32::from_white_alpha(if on { 200 } else { 60 }),
+    );
+    if on {
+        painter.circle_filled(center, l.s(14.0), color.gamma_multiply(0.15));
+    }
+}
+
+pub fn jack(painter: &Painter, l: &L, center: Pos2, label: &str, ink: Color32) {
+    painter.circle_filled(center, l.s(8.0), METAL);
+    painter.circle_stroke(
+        center,
+        l.s(8.0),
+        Stroke::new(l.s(0.8), mix(METAL, TOLEX, 0.5)),
+    );
+    painter.circle_filled(center, l.s(4.0), TOLEX);
+    painter.text(
+        center + vec2(0.0, l.s(16.0)),
+        Align2::CENTER_CENTER,
+        label,
+        l.f(7.0),
+        ink,
+    );
+}
+
+pub fn weave(painter: &Painter, l: &L, rect: Rect, base: Color32, thread: Color32, step: f32) {
+    painter.rect_filled(rect, l.s(3.0), base);
+    let s = l.s(step);
+    let mut x = rect.min.x;
+    while x < rect.max.x {
+        painter.line_segment(
+            [pos2(x, rect.min.y), pos2(x, rect.max.y)],
+            Stroke::new(s * 0.35, thread),
+        );
+        x += s;
+    }
+    let mut y = rect.min.y;
+    while y < rect.max.y {
+        painter.line_segment(
+            [pos2(rect.min.x, y), pos2(rect.max.x, y)],
+            Stroke::new(s * 0.2, thread.gamma_multiply(0.7)),
+        );
+        y += s;
+    }
+}
+
+pub fn diamond_plate(painter: &Painter, l: &L, rect: Rect) {
+    painter.rect_filled(rect, l.s(3.0), Color32::from_rgb(0xb4, 0xb6, 0xb8));
+    let s = l.s(9.0);
+    let mut row = 0;
+    let mut y = rect.min.y + s * 0.5;
+    while y < rect.max.y {
+        let mut x = rect.min.x + if row % 2 == 0 { s * 0.5 } else { s };
+        while x < rect.max.x - s * 0.3 {
+            let d = if (row + (x / s) as i32) % 2 == 0 {
+                vec2(s * 0.32, -s * 0.18)
+            } else {
+                vec2(s * 0.32, s * 0.18)
+            };
+            let c = pos2(x, y);
+            painter.line_segment(
+                [c - d, c + d],
+                Stroke::new(s * 0.18, Color32::from_rgb(0xd8, 0xda, 0xdc)),
+            );
+            painter.line_segment(
+                [c - d + vec2(0.0, s * 0.08), c + d + vec2(0.0, s * 0.08)],
+                Stroke::new(s * 0.08, Color32::from_black_alpha(60)),
+            );
+            x += s;
+        }
+        y += s * 0.75;
+        row += 1;
+    }
+}
+
+pub fn tolex(painter: &Painter, l: &L, rect: Rect, color: Color32, radius: f32) {
+    painter.rect_filled(rect, radius, color);
+    let s = l.s(5.0);
+    let mut i = 0;
+    let mut x = rect.min.x - rect.height();
+    while x < rect.max.x {
+        let a = pos2(x.max(rect.min.x), rect.max.y - (x.max(rect.min.x) - x));
+        let b_x = (x + rect.height()).min(rect.max.x);
+        let b = pos2(b_x, rect.max.y - (b_x - x));
+        painter.line_segment(
+            [a, b],
+            Stroke::new(
+                1.0_f32,
+                Color32::from_white_alpha(if i % 3 == 0 { 7 } else { 3 }),
+            ),
+        );
+        x += s;
+        i += 1;
+    }
 }

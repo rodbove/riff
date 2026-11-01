@@ -733,60 +733,243 @@ const AMP: Rect = Rect {
     max: egui::Pos2 { x: 790.0, y: 534.0 },
 };
 
+enum Band {
+    Weave(egui::Color32, egui::Color32, f32),
+    Diamond,
+}
+
+struct AmpLook {
+    tolex: egui::Color32,
+    piping: Option<egui::Color32>,
+    band: Band,
+    panel: egui::Color32,
+    ink: egui::Color32,
+    logo: egui::Color32,
+    knob: KnobLook,
+}
+
+fn c(r: u8, g: u8, b: u8) -> egui::Color32 {
+    egui::Color32::from_rgb(r, g, b)
+}
+
+fn amp_look(model: Option<AmpModel>) -> AmpLook {
+    let black = c(0x14, 0x14, 0x14);
+    let chrome = c(0xc4, 0xc4, 0xc0);
+    let black_weave = Band::Weave(c(0x16, 0x16, 0x16), c(0x26, 0x26, 0x26), 3.0);
+    match model {
+        Some(AmpModel::Clean) => AmpLook {
+            tolex: black,
+            piping: Some(c(0xb8, 0xb8, 0xb0)),
+            band: Band::Weave(c(0x8e, 0x8e, 0x8a), c(0xc4, 0xc4, 0xbc), 3.0),
+            panel: c(0x18, 0x18, 0x18),
+            ink: c(0xe8, 0xe6, 0xe0),
+            logo: c(0x1a, 0x1a, 0x1a),
+            knob: KnobLook {
+                body: black,
+                cap: c(0x22, 0x22, 0x22),
+                pointer: c(0xf0, 0xf0, 0xf0),
+                skirt: Some(chrome),
+            },
+        },
+        Some(AmpModel::Brit) => AmpLook {
+            tolex: black,
+            piping: Some(c(0xee, 0xee, 0xe8)),
+            band: black_weave,
+            panel: c(0xc9, 0xa9, 0x4a),
+            ink: c(0x1a, 0x16, 0x0c),
+            logo: c(0xf4, 0xf2, 0xec),
+            knob: KnobLook {
+                body: black,
+                cap: c(0xd6, 0xb8, 0x5a),
+                pointer: c(0x14, 0x12, 0x0a),
+                skirt: None,
+            },
+        },
+        Some(AmpModel::Mark) => AmpLook {
+            tolex: c(0x10, 0x10, 0x10),
+            piping: None,
+            band: black_weave,
+            panel: c(0x1c, 0x1c, 0x1c),
+            ink: c(0xe8, 0xe8, 0xe8),
+            logo: c(0xd8, 0xd8, 0xd8),
+            knob: KnobLook {
+                body: black,
+                cap: c(0x1e, 0x1e, 0x1e),
+                pointer: c(0xf4, 0xf4, 0xf4),
+                skirt: None,
+            },
+        },
+        Some(AmpModel::Recto) => AmpLook {
+            tolex: c(0x10, 0x10, 0x10),
+            piping: None,
+            band: Band::Diamond,
+            panel: c(0x16, 0x16, 0x16),
+            ink: c(0xe8, 0xe8, 0xe8),
+            logo: c(0x18, 0x18, 0x18),
+            knob: KnobLook {
+                body: black,
+                cap: chrome,
+                pointer: c(0x14, 0x14, 0x14),
+                skirt: None,
+            },
+        },
+        Some(AmpModel::Block) => AmpLook {
+            tolex: c(0x12, 0x12, 0x12),
+            piping: None,
+            band: Band::Weave(c(0x1a, 0x1a, 0x1a), c(0x2c, 0x2c, 0x2c), 2.5),
+            panel: c(0x1e, 0x1e, 0x20),
+            ink: c(0xd8, 0xd8, 0xdc),
+            logo: c(0xd0, 0xd2, 0xd6),
+            knob: KnobLook {
+                body: black,
+                cap: chrome,
+                pointer: c(0x14, 0x14, 0x14),
+                skirt: None,
+            },
+        },
+        Some(AmpModel::Uber) => AmpLook {
+            tolex: c(0x0e, 0x0e, 0x0e),
+            piping: Some(c(0xc8, 0x2a, 0x1e)),
+            band: Band::Weave(c(0x22, 0x22, 0x22), c(0x34, 0x34, 0x34), 3.5),
+            panel: c(0x12, 0x12, 0x12),
+            ink: c(0xff, 0x7a, 0x3a),
+            logo: c(0xff, 0x7a, 0x3a),
+            knob: KnobLook {
+                body: black,
+                cap: c(0x1a, 0x1a, 0x1a),
+                pointer: c(0xff, 0x7a, 0x3a),
+                skirt: None,
+            },
+        },
+        None => AmpLook {
+            tolex: c(0x26, 0x28, 0x2c),
+            piping: Some(c(0x2f, 0xb8, 0xa8)),
+            band: Band::Weave(c(0x16, 0x1c, 0x1e), c(0x22, 0x2c, 0x30), 2.5),
+            panel: c(0x12, 0x26, 0x26),
+            ink: c(0x8c, 0xe8, 0xdc),
+            logo: c(0x8c, 0xe8, 0xdc),
+            knob: KnobLook {
+                body: black,
+                cap: c(0x1c, 0x2c, 0x2c),
+                pointer: c(0x8c, 0xe8, 0xdc),
+                skirt: None,
+            },
+        },
+    }
+}
+
+fn corners(painter: &egui::Painter, l: &L, rect: Rect) {
+    let s = l.s(13.0);
+    for (x, y) in [
+        (rect.min.x, rect.min.y),
+        (rect.max.x - s, rect.min.y),
+        (rect.min.x, rect.max.y - s),
+        (rect.max.x - s, rect.max.y - s),
+    ] {
+        let r = Rect::from_min_size(pos2(x, y), vec2(s, s));
+        painter.rect_filled(r, l.s(3.0), METAL);
+        painter.circle_filled(r.center(), l.s(1.6), mix(METAL, TOLEX, 0.6));
+    }
+}
+
 fn amp_head(ui: &Ui, l: &L, host: &mut dyn Host) {
-    let r = l.r(AMP.min.x, AMP.min.y, AMP.width(), AMP.height());
-    let painter = ui.painter();
-    painter.rect_filled(
-        r.translate(vec2(0.0, l.s(4.0))),
-        l.s(12.0),
-        egui::Color32::from_black_alpha(160),
-    );
-    painter.rect_filled(r, l.s(12.0), TOLEX);
-    let plate = Rect::from_min_max(
-        r.min + vec2(l.s(14.0), l.s(44.0)),
-        r.max - vec2(l.s(14.0), l.s(14.0)),
-    );
-    painter.rect_filled(plate, l.s(6.0), PLATE);
     let state = host.rig().amp.clone();
     let use_nam = state.use_nam && state.nam.is_some();
+    let look = amp_look(if use_nam { None } else { Some(state.model) });
+    let painter = ui.painter();
+    let handle = l.r(AMP.center().x - 80.0, AMP.min.y, 160.0, 12.0);
+    painter.rect_filled(handle, l.s(6.0), c(0x24, 0x20, 0x1c));
+    painter.line_segment(
+        [
+            handle.left_top() + vec2(l.s(10.0), l.s(2.0)),
+            handle.right_top() + vec2(-l.s(10.0), l.s(2.0)),
+        ],
+        Stroke::new(l.s(1.0), egui::Color32::from_white_alpha(30)),
+    );
+    for x in [handle.min.x, handle.max.x - l.s(16.0)] {
+        painter.rect_filled(
+            Rect::from_min_size(pos2(x, handle.min.y + l.s(2.0)), vec2(l.s(16.0), l.s(12.0))),
+            l.s(2.0),
+            METAL,
+        );
+    }
+    let head = l.r(
+        AMP.min.x,
+        AMP.min.y + 10.0,
+        AMP.width(),
+        AMP.height() - 10.0,
+    );
+    shadow(painter, l, head, l.s(10.0));
+    tolex(painter, l, head, look.tolex, l.s(10.0));
+    if let Some(p) = look.piping {
+        painter.rect_stroke(
+            head.shrink(l.s(7.0)),
+            l.s(7.0),
+            Stroke::new(l.s(1.6), p),
+            egui::StrokeKind::Inside,
+        );
+    }
+    corners(painter, l, head);
+    let band = l.r(AMP.min.x + 16.0, AMP.min.y + 24.0, AMP.width() - 32.0, 56.0);
+    match look.band {
+        Band::Weave(base, thread, step) => weave(painter, l, band, base, thread, step),
+        Band::Diamond => diamond_plate(painter, l, band),
+    }
+    painter.rect_stroke(
+        band,
+        l.s(3.0),
+        Stroke::new(l.s(1.0), egui::Color32::from_black_alpha(140)),
+        egui::StrokeKind::Inside,
+    );
     let title = if use_nam {
-        format!(
-            "NAM  {}",
-            state
-                .nam
-                .as_deref()
-                .and_then(|p| std::path::Path::new(p).file_stem())
-                .map(|s| s.to_string_lossy().to_uppercase())
-                .unwrap_or_default()
-        )
+        state
+            .nam
+            .as_deref()
+            .and_then(|p| std::path::Path::new(p).file_stem())
+            .map(|s| s.to_string_lossy().to_uppercase())
+            .unwrap_or_default()
     } else {
         state.model.voicing().name.to_string()
     };
+    let logo_pos = band.left_center() + vec2(l.s(18.0), -l.s(4.0));
     painter.text(
-        r.min + vec2(l.s(20.0), l.s(22.0)),
+        logo_pos + vec2(l.s(1.0), l.s(1.5)),
         Align2::LEFT_CENTER,
-        title,
-        l.f(16.0),
-        PLATE,
+        if use_nam { "NAM" } else { title.as_str() },
+        egui::FontId::proportional(l.s(26.0)),
+        egui::Color32::from_black_alpha(150),
     );
-    if !use_nam {
-        painter.text(
-            r.min + vec2(l.s(20.0), l.s(36.0)),
-            Align2::LEFT_CENTER,
-            state.model.voicing().like,
-            l.f(8.0),
-            DIM,
-        );
-    }
+    painter.text(
+        logo_pos,
+        Align2::LEFT_CENTER,
+        if use_nam { "NAM" } else { title.as_str() },
+        egui::FontId::proportional(l.s(26.0)),
+        look.logo,
+    );
+    let subtitle = if use_nam {
+        title.clone()
+    } else {
+        state.model.voicing().like.to_uppercase()
+    };
+    painter.text(
+        band.left_bottom() + vec2(l.s(20.0), -l.s(8.0)),
+        Align2::LEFT_CENTER,
+        subtitle,
+        l.f(7.5),
+        match look.band {
+            Band::Weave(base, _, _) => mix(ink_on(base), base, 0.3),
+            Band::Diamond => c(0x30, 0x30, 0x30),
+        },
+    );
     let mut rebuild = false;
-    let models = AmpModel::ALL;
-    let bw = 70.0;
-    for (i, m) in models.iter().enumerate() {
+    let chip_w = 54.0;
+    let chips_x = AMP.max.x - 26.0 - 7.0 * (chip_w + 4.0);
+    for (i, m) in AmpModel::ALL.iter().enumerate() {
         let rect = l.r(
-            AMP.min.x + 300.0 + i as f32 * (bw - 6.0),
-            AMP.min.y + 8.0,
-            bw - 10.0,
-            26.0,
+            chips_x + i as f32 * (chip_w + 4.0),
+            AMP.min.y + 40.0,
+            chip_w,
+            24.0,
         );
         let short = m.voicing().name.split(' ').next().unwrap_or("");
         if button(
@@ -805,7 +988,12 @@ fn amp_head(ui: &Ui, l: &L, host: &mut dyn Host) {
             rebuild = true;
         }
     }
-    let nam_rect = l.r(AMP.max.x - 72.0, AMP.min.y + 8.0, 58.0, 26.0);
+    let nam_rect = l.r(
+        chips_x + 6.0 * (chip_w + 4.0),
+        AMP.min.y + 40.0,
+        chip_w,
+        24.0,
+    );
     let nam_btn = button(ui, l, "nam", nam_rect, "NAM", use_nam);
     if nam_btn.clicked() {
         if state.nam.is_some() && !state.use_nam {
@@ -818,20 +1006,55 @@ fn amp_head(ui: &Ui, l: &L, host: &mut dyn Host) {
     if nam_btn.secondary_clicked() {
         host.pick(Pick::Nam);
     }
-    let params: &[Param] = if use_nam { nam::PARAMS } else { amp::PARAMS };
+    let panel = l.r(
+        AMP.min.x + 16.0,
+        AMP.min.y + 86.0,
+        AMP.width() - 32.0,
+        AMP.height() - 98.0,
+    );
+    let painter = ui.painter();
+    painter.rect_filled(panel, l.s(4.0), look.panel);
+    bevel(painter, panel, l.s(4.0), true);
+    for (x, y) in [
+        (panel.min.x + l.s(7.0), panel.min.y + l.s(7.0)),
+        (panel.max.x - l.s(7.0), panel.min.y + l.s(7.0)),
+        (panel.min.x + l.s(7.0), panel.max.y - l.s(7.0)),
+        (panel.max.x - l.s(7.0), panel.max.y - l.s(7.0)),
+    ] {
+        screw(painter, pos2(x, y), l.s(2.4), look.panel);
+    }
+    let row_y = panel.center().y - l.s(8.0);
+    jack(
+        painter,
+        l,
+        pos2(panel.min.x + l.s(34.0), row_y),
+        "INPUT",
+        look.ink,
+    );
+    let params: &[Param] = if use_nam {
+        nam::PARAMS
+    } else {
+        &amp::PARAMS[..7]
+    };
     let values = if use_nam {
         state.nam_values.clone()
     } else {
         state.values.clone()
     };
-    let step = plate.width() / (params.len() as f32 + 1.0);
     for (i, p) in params.iter().enumerate() {
-        let c = pos2(
-            plate.min.x + step * (i as f32 + 1.0) - l.s(30.0),
-            plate.center().y - l.s(6.0),
-        );
+        let center = pos2(panel.min.x + l.s(96.0 + i as f32 * 72.0), row_y);
         let v = values.get(i).copied().unwrap_or(p.default);
-        if let Some(nv) = knob(ui, l, ("amp", use_nam, i), c, 20.0, p, v, PLATE) {
+        if let Some(nv) = knob_look(
+            ui,
+            l,
+            ("amp", use_nam, i),
+            center,
+            17.0,
+            p,
+            v,
+            look.panel,
+            &look.knob,
+        ) {
             let amp = &mut host.rig().amp;
             if use_nam {
                 amp.nam_values[i] = nv;
@@ -841,19 +1064,34 @@ fn amp_head(ui: &Ui, l: &L, host: &mut dyn Host) {
             host.set(Target::Amp, i, nv);
         }
     }
+    if !use_nam {
+        let bright = state.values.get(amp::BRIGHT).copied().unwrap_or(0.0) > 0.5;
+        let at = pos2(
+            panel.min.x + l.s(96.0 + 7.0 * 72.0 - 12.0),
+            row_y - l.s(4.0),
+        );
+        if toggle(ui, l, "bright", at, bright, "BRIGHT", look.ink).clicked() {
+            let v = if bright { 0.0 } else { 1.0 };
+            host.rig().amp.values[amp::BRIGHT] = v;
+            host.set(Target::Amp, amp::BRIGHT, v);
+        }
+    }
     let on = state.on;
-    led(
-        ui,
+    jewel(
+        ui.painter(),
         l,
-        pos2(plate.max.x - l.s(52.0), plate.center().y - l.s(30.0)),
+        pos2(panel.max.x - l.s(86.0), row_y - l.s(4.0)),
         on,
         RED,
     );
-    if footswitch(
+    if toggle(
         ui,
         l,
         "amp-on",
-        pos2(plate.max.x - l.s(52.0), plate.center().y + l.s(10.0)),
+        pos2(panel.max.x - l.s(40.0), row_y - l.s(4.0)),
+        on,
+        "POWER",
+        look.ink,
     )
     .clicked()
     {
@@ -865,31 +1103,120 @@ fn amp_head(ui: &Ui, l: &L, host: &mut dyn Host) {
     }
 }
 
-const CAB: Rect = Rect {
-    min: egui::Pos2 { x: 800.0, y: 344.0 },
-    max: egui::Pos2 {
-        x: 1180.0,
-        y: 534.0,
-    },
-};
+struct CabLook {
+    tolex: egui::Color32,
+    piping: Option<egui::Color32>,
+    grille: egui::Color32,
+    thread: egui::Color32,
+    speakers: usize,
+    height: f32,
+}
+
+fn cab_look(model: CabModel) -> CabLook {
+    match model {
+        CabModel::V30 => CabLook {
+            tolex: c(0x12, 0x12, 0x12),
+            piping: Some(c(0xe8, 0xe8, 0xe2)),
+            grille: c(0x15, 0x15, 0x15),
+            thread: c(0x2e, 0x2e, 0x2e),
+            speakers: 4,
+            height: 178.0,
+        },
+        CabModel::Greenback => CabLook {
+            tolex: c(0x14, 0x14, 0x14),
+            piping: Some(c(0xe8, 0xe8, 0xe2)),
+            grille: c(0x5e, 0x5c, 0x55),
+            thread: c(0x8e, 0x8b, 0x80),
+            speakers: 4,
+            height: 178.0,
+        },
+        CabModel::OpenBack => CabLook {
+            tolex: c(0x16, 0x16, 0x16),
+            piping: None,
+            grille: c(0x8e, 0x8e, 0x8a),
+            thread: c(0xbe, 0xbe, 0xb6),
+            speakers: 2,
+            height: 132.0,
+        },
+        CabModel::Single => CabLook {
+            tolex: c(0x5a, 0x3c, 0x24),
+            piping: Some(c(0x2a, 0x1c, 0x10)),
+            grille: c(0x84, 0x6c, 0x48),
+            thread: c(0xa2, 0x88, 0x5e),
+            speakers: 1,
+            height: 140.0,
+        },
+    }
+}
 
 fn cabinet(ui: &Ui, l: &L, host: &mut dyn Host) {
-    let r = l.r(CAB.min.x, CAB.min.y, CAB.width(), CAB.height());
-    let painter = ui.painter();
-    painter.rect_filled(r, l.s(12.0), TOLEX);
-    let grill = Rect::from_min_max(
-        r.min + vec2(l.s(12.0), l.s(44.0)),
-        r.max - vec2(l.s(12.0), l.s(12.0)),
-    );
-    painter.rect_filled(grill, l.s(6.0), mix(TOLEX, PANEL, 0.6));
     let state = host.rig().cab.clone();
+    let look = cab_look(state.model);
+    let painter = ui.painter();
+    let w = if look.speakers == 1 { 140.0 } else { 178.0 };
+    let bx = CAB.min.x + 6.0 + (178.0 - w) / 2.0;
+    let boxr = l.r(bx, CAB.max.y - 6.0 - look.height, w, look.height);
+    shadow(painter, l, boxr, l.s(8.0));
+    tolex(painter, l, boxr, look.tolex, l.s(8.0));
+    let grille = boxr.shrink(l.s(11.0));
+    weave(painter, l, grille, look.grille, look.thread, 2.5);
+    let cols = if look.speakers >= 2 { 2 } else { 1 };
+    let rows = look.speakers.div_ceil(cols);
+    let cw = grille.width() / cols as f32;
+    let rh = grille.height() / rows as f32;
+    for i in 0..look.speakers {
+        let center = pos2(
+            grille.min.x + cw * ((i % cols) as f32 + 0.5),
+            grille.min.y + rh * ((i / cols) as f32 + 0.5),
+        );
+        let r = cw.min(rh) * 0.42;
+        painter.circle_filled(center, r, egui::Color32::from_black_alpha(70));
+        painter.circle_stroke(
+            center,
+            r,
+            Stroke::new(l.s(1.2), egui::Color32::from_white_alpha(14)),
+        );
+        painter.circle_stroke(
+            center,
+            r * 0.7,
+            Stroke::new(l.s(1.0), egui::Color32::from_black_alpha(35)),
+        );
+        painter.circle_filled(center, r * 0.22, egui::Color32::from_black_alpha(70));
+    }
+    if let Some(p) = look.piping {
+        painter.rect_stroke(
+            grille.expand(l.s(2.0)),
+            l.s(3.0),
+            Stroke::new(l.s(1.0), p.gamma_multiply(0.8)),
+            egui::StrokeKind::Outside,
+        );
+    }
+    corners(painter, l, boxr);
+    painter.text(
+        grille.left_top() + vec2(l.s(6.0), l.s(8.0)),
+        Align2::LEFT_CENTER,
+        state.model.name(),
+        l.f(8.0),
+        egui::Color32::from_white_alpha(200),
+    );
+    let panel = l.r(
+        CAB.min.x + 192.0,
+        CAB.min.y + 6.0,
+        CAB.width() - 196.0,
+        CAB.height() - 12.0,
+    );
+    let painter = ui.painter();
+    shadow(painter, l, panel, l.s(6.0));
+    painter.rect_filled(panel, l.s(6.0), PANEL);
+    bevel(painter, panel, l.s(6.0), false);
     let mut rebuild = false;
+    let px = CAB.min.x + 200.0;
     for (i, m) in CabModel::ALL.iter().enumerate() {
         let rect = l.r(
-            CAB.min.x + 12.0 + i as f32 * 74.0,
-            CAB.min.y + 10.0,
-            70.0,
-            26.0,
+            px + (i % 2) as f32 * 88.0,
+            CAB.min.y + 12.0 + (i / 2) as f32 * 26.0,
+            84.0,
+            22.0,
         );
         if button(ui, l, ("cab", i), rect, m.name(), state.model == *m).clicked() {
             host.rig().cab.model = *m;
@@ -911,12 +1238,7 @@ fn cabinet(ui: &Ui, l: &L, host: &mut dyn Host) {
                 }
             }
         };
-        let rect = l.r(
-            CAB.min.x + 22.0 + mic as f32 * 172.0,
-            CAB.min.y + 54.0,
-            164.0,
-            26.0,
-        );
+        let rect = l.r(px, CAB.min.y + 70.0 + mic as f32 * 26.0, 134.0, 22.0);
         let resp = button(ui, l, ("ir", mic), rect, &label, path.is_some());
         if resp.clicked() {
             host.pick(Pick::Ir(mic));
@@ -931,36 +1253,41 @@ fn cabinet(ui: &Ui, l: &L, host: &mut dyn Host) {
             rebuild = true;
         }
     }
+    let on = state.on;
+    if toggle(
+        ui,
+        l,
+        "cab-on",
+        l.p(px + 156.0, CAB.min.y + 88.0),
+        on,
+        "CAB",
+        INK,
+    )
+    .clicked()
+    {
+        host.rig().cab.on = !on;
+        host.enable(Target::Cab, !on);
+    }
     for (i, p) in cab::PARAMS.iter().enumerate() {
-        let c = l.p(CAB.min.x + 60.0 + i as f32 * 80.0, CAB.min.y + 126.0);
+        let center = l.p(px + 16.0 + i as f32 * 44.0, CAB.min.y + 148.0);
         let v = state.values.get(i).copied().unwrap_or(p.default);
-        if let Some(nv) = knob(ui, l, ("cabk", i), c, 18.0, p, v, PANEL) {
+        if let Some(nv) = knob(ui, l, ("cabk", i), center, 12.0, p, v, PANEL) {
             host.rig().cab.values[i] = nv;
             host.set(Target::Cab, i, nv);
         }
-    }
-    let on = state.on;
-    let resp = ui.interact(
-        l.r(CAB.max.x - 60.0, CAB.min.y + 10.0, 48.0, 26.0),
-        Id::NULL.with("cab-on"),
-        Sense::click(),
-    );
-    button(
-        ui,
-        l,
-        "cab-on-face",
-        l.r(CAB.max.x - 60.0, CAB.min.y + 10.0, 48.0, 26.0),
-        if on { "ON" } else { "OFF" },
-        on,
-    );
-    if resp.clicked() {
-        host.rig().cab.on = !on;
-        host.enable(Target::Cab, !on);
     }
     if rebuild {
         host.rebuild();
     }
 }
+
+const CAB: Rect = Rect {
+    min: egui::Pos2 { x: 800.0, y: 344.0 },
+    max: egui::Pos2 {
+        x: 1180.0,
+        y: 534.0,
+    },
+};
 
 const RACK: Rect = Rect {
     min: egui::Pos2 { x: 20.0, y: 546.0 },

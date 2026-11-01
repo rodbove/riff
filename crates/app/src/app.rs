@@ -37,7 +37,7 @@ pub struct App {
 }
 
 impl App {
-    pub fn new() -> Self {
+    pub fn new(offline: bool) -> Self {
         let settings = Settings::load();
         let rig = load_current().unwrap_or_default();
         let mut app = Self {
@@ -62,6 +62,9 @@ impl App {
             tap: VecDeque::with_capacity(TUNER_WINDOW * 2),
             last_tuned: 0.0,
         };
+        if offline {
+            return app;
+        }
         app.restart();
         let port = app
             .settings
