@@ -9,7 +9,7 @@ use riff_dsp::rig::{MAX_POST, MAX_PRE, Slot};
 use riff_dsp::tuner::Reading;
 use riff_dsp::{Rig, Target, nam};
 
-use crate::egui::{self, Align2, Id, Rect, Sense, Stroke, StrokeKind, Ui, pos2, vec2};
+use crate::egui::{self, Align2, Id, Rect, Sense, Stroke, Ui, pos2, vec2};
 use theme::*;
 use widgets::*;
 
@@ -54,6 +54,7 @@ pub trait Host {
 pub struct View {
     pub browser: bool,
     pub category: usize,
+    pub album: usize,
     pub adding: Option<bool>,
     pub naming: Option<String>,
     drag: Option<(bool, usize, f32)>,
@@ -106,6 +107,16 @@ fn header(ui: &Ui, l: &L, host: &mut dyn Host, view: &mut View) {
     if button(ui, l, "preset", preset, "", view.browser).clicked() {
         view.browser = !view.browser;
         view.adding = None;
+        if view.browser {
+            let (band, album) = (host.rig().category.clone(), host.rig().album.clone());
+            if let Some(c) = categories().iter().position(|c| *c == band) {
+                view.category = c;
+                view.album = riff_dsp::preset::albums(host.presets(), &band)
+                    .iter()
+                    .position(|a| *a == album)
+                    .unwrap_or(0);
+            }
+        }
     }
     ui.painter().text(
         preset.left_center() + vec2(l.s(12.0), 0.0),
@@ -175,23 +186,6 @@ fn header(ui: &Ui, l: &L, host: &mut dyn Host, view: &mut View) {
     }
 }
 
-fn messages(ui: &Ui, l: &L, host: &mut dyn Host) {
-    let painter = ui.painter();
-    let msgs = host.messages();
-    let text = if msgs.is_empty() {
-        host.status()
-    } else {
-        msgs.join("   ")
-    };
-    painter.text(
-        l.p(24.0, 74.0),
-        Align2::LEFT_CENTER,
-        text,
-        l.f(9.0),
-        if msgs.is_empty() { DIM } else { ORANGE },
-    );
-}
-
 const BOARD: Rect = Rect {
     min: egui::Pos2 { x: 20.0, y: 88.0 },
     max: egui::Pos2 {
@@ -202,11 +196,32 @@ const BOARD: Rect = Rect {
 const PEDAL_W: f32 = 112.0;
 const PEDAL_GAP: f32 = 4.0;
 
+fn messages(ui: &Ui, l: &L, host: &mut dyn Host) {
+    let painter = ui.painter();
+    let msgs = host.messages();
+    let note = host.rig().note.clone();
+    let (text, color) = if !msgs.is_empty() {
+        (msgs.join("   "), ORANGE)
+    } else {
+        (note, KNOB_CAP)
+    };
+    painter.text(l.p(24.0, 76.0), Align2::LEFT_CENTER, text, l.f(9.0), color);
+    painter.text(
+        l.p(W - 24.0, 76.0),
+        Align2::RIGHT_CENTER,
+        host.status(),
+        l.f(8.0),
+        DIM,
+    );
+}
+
 fn floor(ui: &Ui, l: &L, area: Rect, title: &str) -> Rect {
     let r = l.r(area.min.x, area.min.y, area.width(), area.height());
-    ui.painter().rect_filled(r, l.s(10.0), FLOOR);
-    ui.painter().text(
-        r.left_top() + vec2(l.s(10.0), l.s(8.0)),
+    let painter = ui.painter();
+    shadow(painter, l, r, l.s(10.0));
+    rails(painter, l, r);
+    painter.text(
+        r.left_top() + vec2(l.s(12.0), l.s(4.0)),
         Align2::LEFT_TOP,
         title,
         l.f(8.0),
@@ -218,26 +233,46 @@ fn floor(ui: &Ui, l: &L, area: Rect, title: &str) -> Rect {
 fn board(ui: &Ui, l: &L, host: &mut dyn Host, view: &mut View) {
     floor(ui, l, BOARD, "PEDALBOARD");
     let y = BOARD.min.y + 18.0;
-    let h = BOARD.height() - 26.0;
+    let h = BOARD.height() - 30.0;
+    let slots = host.rig().pre.clone();
+    let x_of = |i: usize| BOARD.min.x + 10.0 + i as f32 * (PEDAL_W + PEDAL_GAP);
+    let mut rects = vec![l.r(x_of(0), y, PEDAL_W, h)];
+    for i in 0..slots.len() {
+        let mut x = x_of(i + 1);
+        if let Some((false, from, dx)) = view.drag
+            && from == i
+        {
+            x += dx / l.k;
+        }
+        rects.push(l.r(x, y, PEDAL_W, h));
+    }
+    for pair in rects.windows(2) {
+        cable(
+            ui.painter(),
+            l,
+            pos2(pair[0].max.x + l.s(3.0), jack_y(l, pair[0])),
+            pos2(pair[1].min.x - l.s(3.0), jack_y(l, pair[1])),
+        );
+    }
     let gate = host.rig().gate.clone();
-    let rect = l.r(BOARD.min.x + 8.0, y, PEDAL_W, h);
     let params = [
         Param::new("THRESH", -90.0, -10.0, -55.0, Unit::Db),
         Param::new("RELEASE", 5.0, 500.0, 60.0, Unit::Ms).curved(2.0),
     ];
     let values = [gate.threshold, gate.release];
-    let (changed, toggled, _) = stomp(
+    let out = stomp(
         ui,
         l,
         "gate",
-        rect,
+        rects[0],
         "GATE",
         [0x1e, 0x1e, 0x1e],
         &params,
         &values,
         gate.on,
+        false,
     );
-    if let Some((i, v)) = changed {
+    if let Some((i, v)) = out.changed {
         let g = &mut host.rig().gate;
         if i == 0 {
             g.threshold = v;
@@ -246,55 +281,48 @@ fn board(ui: &Ui, l: &L, host: &mut dyn Host, view: &mut View) {
         }
         host.set(Target::Gate, i, v);
     }
-    if toggled {
+    if out.toggled {
         let on = !gate.on;
         host.rig().gate.on = on;
         host.enable(Target::Gate, on);
     }
-    let slots = host.rig().pre.clone();
     let mut remove = None;
     let mut drop_at = None;
     for (i, s) in slots.iter().enumerate() {
-        let mut x = BOARD.min.x + 8.0 + (i + 1) as f32 * (PEDAL_W + PEDAL_GAP);
-        if let Some((false, from, dx)) = view.drag
-            && from == i
-        {
-            x += dx / l.k;
-        }
-        let rect = l.r(x, y, PEDAL_W, h);
         let spec = s.kind.spec();
-        let (changed, toggled, resp) = stomp(
+        let out = stomp(
             ui,
             l,
             ("pre", i),
-            rect,
+            rects[i + 1],
             spec.name,
             spec.color,
             spec.params,
             &s.values,
             s.on,
+            true,
         );
-        if let Some((p, v)) = changed {
+        if let Some((p, v)) = out.changed {
             host.rig().pre[i].values[p] = v;
             host.set(Target::Pre(i), p, v);
         }
-        if toggled {
+        if out.toggled {
             let on = !s.on;
             host.rig().pre[i].on = on;
             host.enable(Target::Pre(i), on);
         }
-        if resp.secondary_clicked() {
+        if out.removed || out.body.secondary_clicked() {
             remove = Some(i);
         }
-        if resp.dragged() {
+        if out.body.dragged() {
             let dx = view
                 .drag
                 .filter(|d| !d.0 && d.1 == i)
                 .map(|d| d.2)
                 .unwrap_or(0.0);
-            view.drag = Some((false, i, dx + resp.drag_delta().x));
+            view.drag = Some((false, i, dx + out.body.drag_delta().x));
         }
-        if resp.drag_stopped()
+        if out.body.drag_stopped()
             && let Some((false, from, dx)) = view.drag.take()
         {
             let shift = (dx / l.s(PEDAL_W + PEDAL_GAP)).round() as i32;
@@ -305,7 +333,7 @@ fn board(ui: &Ui, l: &L, host: &mut dyn Host, view: &mut View) {
         }
     }
     if slots.len() < MAX_PRE {
-        let x = BOARD.min.x + 8.0 + (slots.len() + 1) as f32 * (PEDAL_W + PEDAL_GAP);
+        let x = x_of(slots.len() + 1);
         if button(
             ui,
             l,
@@ -320,9 +348,9 @@ fn board(ui: &Ui, l: &L, host: &mut dyn Host, view: &mut View) {
         }
     }
     ui.painter().text(
-        l.p(BOARD.max.x - 10.0, BOARD.min.y + 8.0),
+        l.p(BOARD.max.x - 12.0, BOARD.min.y + 4.0),
         Align2::RIGHT_TOP,
-        "drag to reorder  right-click to remove",
+        "drag to reorder   X removes",
         l.f(7.5),
         DIM,
     );
@@ -338,6 +366,13 @@ fn board(ui: &Ui, l: &L, host: &mut dyn Host, view: &mut View) {
     }
 }
 
+struct Stomp {
+    changed: Option<(usize, f32)>,
+    toggled: bool,
+    removed: bool,
+    body: egui::Response,
+}
+
 #[allow(clippy::too_many_arguments)]
 fn stomp(
     ui: &Ui,
@@ -349,26 +384,22 @@ fn stomp(
     params: &[Param],
     values: &[f32],
     on: bool,
-) -> (Option<(usize, f32)>, bool, egui::Response) {
-    let resp = ui.interact(rect, Id::NULL.with(("body", id)), Sense::click_and_drag());
+    removable: bool,
+) -> Stomp {
+    let body = ui.interact(rect, Id::NULL.with(("body", id)), Sense::click_and_drag());
     let face = rgb(color);
     let ink = ink_on(face);
+    enclosure(ui.painter(), l, rect, face);
+    let label = Rect::from_min_max(
+        pos2(rect.min.x + l.s(10.0), rect.max.y - l.s(68.0)),
+        pos2(rect.max.x - l.s(10.0), rect.max.y - l.s(46.0)),
+    );
     let painter = ui.painter();
-    painter.rect_filled(
-        rect.translate(vec2(0.0, l.s(3.0))),
-        l.s(8.0),
-        egui::Color32::from_black_alpha(150),
-    );
-    painter.rect_filled(rect, l.s(8.0), face);
-    painter.rect_stroke(
-        rect,
-        l.s(8.0),
-        Stroke::new(l.s(1.0), mix(face, TOLEX, 0.4)),
-        StrokeKind::Inside,
-    );
+    painter.rect_filled(label, l.s(3.0), mix(face, TOLEX, 0.25));
+    painter.text(label.center(), Align2::CENTER_CENTER, name, l.f(11.0), ink);
     let knobs = Rect::from_min_max(
-        rect.min + vec2(l.s(4.0), l.s(14.0)),
-        pos2(rect.max.x - l.s(4.0), rect.max.y - l.s(80.0)),
+        rect.min + vec2(l.s(6.0), l.s(18.0)),
+        pos2(rect.max.x - l.s(6.0), rect.max.y - l.s(90.0)),
     );
     let (points, radius) = knob_grid(params.len(), knobs, l);
     let mut changed = None;
@@ -381,16 +412,9 @@ fn stomp(
     led(
         ui,
         l,
-        pos2(rect.center().x, rect.max.y - l.s(70.0)),
+        pos2(rect.center().x, rect.max.y - l.s(78.0)),
         on,
         RED,
-    );
-    painter.text(
-        pos2(rect.center().x, rect.max.y - l.s(54.0)),
-        Align2::CENTER_CENTER,
-        name,
-        l.f(11.0),
-        ink,
     );
     let toggled = footswitch(
         ui,
@@ -399,7 +423,194 @@ fn stomp(
         pos2(rect.center().x, rect.max.y - l.s(24.0)),
     )
     .clicked();
-    (changed, toggled, resp)
+    let removed = removable
+        && close_button(
+            ui,
+            l,
+            ("x", id),
+            pos2(rect.max.x - l.s(4.0), rect.min.y + l.s(4.0)),
+        )
+        .clicked();
+    Stomp {
+        changed,
+        toggled,
+        removed,
+        body,
+    }
+}
+
+fn browser(ui: &Ui, l: &L, host: &mut dyn Host, view: &mut View) {
+    floor(ui, l, BOARD, "PRESETS");
+    let cats = categories();
+    let tab_w = (BOARD.width() - 20.0) / cats.len() as f32;
+    for (i, c) in cats.iter().enumerate() {
+        let rect = l.r(
+            BOARD.min.x + 10.0 + i as f32 * tab_w,
+            BOARD.min.y + 16.0,
+            tab_w - 6.0,
+            26.0,
+        );
+        if button(ui, l, ("cat", i), rect, c, view.category == i).clicked() {
+            view.category = i;
+            view.album = 0;
+        }
+    }
+    let cat = cats[view.category.min(cats.len() - 1)];
+    let albums = riff_dsp::preset::albums(host.presets(), cat);
+    let album = albums
+        .get(view.album.min(albums.len().saturating_sub(1)))
+        .cloned();
+    let mut x = BOARD.min.x + 10.0;
+    for (i, a) in albums.iter().enumerate() {
+        let label = if a.is_empty() {
+            "ALL".to_string()
+        } else {
+            a.to_uppercase()
+        };
+        let w = (label.len() as f32 * 7.2 + 24.0).max(70.0);
+        let rect = l.r(x, BOARD.min.y + 48.0, w, 24.0);
+        if button(ui, l, ("album", i), rect, &label, album.as_ref() == Some(a)).clicked() {
+            view.album = i;
+        }
+        x += w + 6.0;
+    }
+    let items: Vec<(usize, String)> = host
+        .presets()
+        .iter()
+        .enumerate()
+        .filter(|(_, r)| r.category == cat && Some(&r.album) == album.as_ref())
+        .map(|(i, r)| (i, r.name.clone()))
+        .collect();
+    if items.is_empty() {
+        ui.painter().text(
+            l.p(BOARD.center().x, BOARD.center().y + 20.0),
+            Align2::CENTER_CENTER,
+            "no presets here yet. SAVE stores the current tone.",
+            l.f(10.0),
+            DIM,
+        );
+    }
+    let current = host.current();
+    let w = 278.0;
+    let mut load = None;
+    for (n, (i, name)) in items.iter().enumerate() {
+        let (c, row) = (n % 4, n / 4);
+        let rect = l.r(
+            BOARD.min.x + 10.0 + c as f32 * (w + 9.0),
+            BOARD.min.y + 80.0 + row as f32 * 32.0,
+            w,
+            28.0,
+        );
+        if button(
+            ui,
+            l,
+            ("p", *i),
+            rect,
+            &name.to_uppercase(),
+            current == Some(*i),
+        )
+        .clicked()
+        {
+            load = Some(*i);
+        }
+    }
+    if let Some(i) = load {
+        host.load_preset(i);
+        view.browser = false;
+    }
+}
+
+fn rack(ui: &Ui, l: &L, host: &mut dyn Host, view: &mut View) {
+    floor(ui, l, RACK, "EFFECTS RACK");
+    let slots = host.rig().post.clone();
+    let mut remove = None;
+    for (i, s) in slots.iter().enumerate() {
+        let rect = l.r(
+            RACK.min.x + 10.0 + i as f32 * (UNIT_W + 8.0),
+            RACK.min.y + 16.0,
+            UNIT_W,
+            RACK.height() - 26.0,
+        );
+        let spec = s.kind.spec();
+        let face = mix(rgb(spec.color), TOLEX, 0.55);
+        rack_unit(ui.painter(), l, rect, face);
+        let head = Rect::from_min_size(
+            rect.min + vec2(l.s(14.0), 0.0),
+            vec2(rect.width() - l.s(28.0), l.s(26.0)),
+        );
+        let resp = ui.interact(head, Id::NULL.with(("unit-head", i)), Sense::click());
+        let painter = ui.painter();
+        painter.text(
+            head.left_center() + vec2(l.s(4.0), l.s(2.0)),
+            Align2::LEFT_CENTER,
+            spec.name,
+            l.f(11.0),
+            INK,
+        );
+        led(
+            ui,
+            l,
+            pos2(head.max.x - l.s(26.0), head.center().y + l.s(2.0)),
+            s.on,
+            GREEN,
+        );
+        if close_button(
+            ui,
+            l,
+            ("ux", i),
+            pos2(head.max.x - l.s(8.0), head.center().y + l.s(2.0)),
+        )
+        .clicked()
+        {
+            remove = Some(i);
+        }
+        let area = Rect::from_min_max(
+            rect.min + vec2(l.s(16.0), l.s(30.0)),
+            rect.max - vec2(l.s(16.0), l.s(8.0)),
+        );
+        let (points, radius) = knob_grid(spec.params.len(), area, l);
+        for (p_i, (p, c)) in spec.params.iter().zip(points).enumerate() {
+            if let Some(nv) = knob(ui, l, ("post", i, p_i), c, radius, p, s.value(p_i), face) {
+                host.rig().post[i].values[p_i] = nv;
+                host.set(Target::Post(i), p_i, nv);
+            }
+        }
+        if resp.clicked() {
+            let on = !s.on;
+            host.rig().post[i].on = on;
+            host.enable(Target::Post(i), on);
+        }
+        if resp.secondary_clicked() {
+            remove = Some(i);
+        }
+    }
+    if slots.len() < MAX_POST {
+        let x = RACK.min.x + 10.0 + slots.len() as f32 * (UNIT_W + 8.0);
+        if button(
+            ui,
+            l,
+            "add-post",
+            l.r(x, RACK.center().y - 25.0, UNIT_W, 50.0),
+            "+ EFFECT",
+            false,
+        )
+        .clicked()
+        {
+            view.adding = Some(true);
+            view.browser = false;
+        }
+    }
+    ui.painter().text(
+        l.p(RACK.max.x - 12.0, RACK.min.y + 4.0),
+        Align2::RIGHT_TOP,
+        "click a name to switch   X removes",
+        l.f(7.5),
+        DIM,
+    );
+    if let Some(i) = remove {
+        host.rig().post.remove(i);
+        host.rebuild();
+    }
 }
 
 fn adder(ui: &Ui, l: &L, host: &mut dyn Host, view: &mut View, post: bool) {
@@ -462,68 +673,6 @@ fn adder(ui: &Ui, l: &L, host: &mut dyn Host, view: &mut View, post: bool) {
         view.adding = None;
     }
     let _ = r;
-}
-
-fn browser(ui: &Ui, l: &L, host: &mut dyn Host, view: &mut View) {
-    floor(ui, l, BOARD, "PRESETS");
-    let cats = categories();
-    let tab_w = (BOARD.width() - 20.0) / cats.len() as f32;
-    for (i, c) in cats.iter().enumerate() {
-        let rect = l.r(
-            BOARD.min.x + 10.0 + i as f32 * tab_w,
-            BOARD.min.y + 22.0,
-            tab_w - 6.0,
-            28.0,
-        );
-        if button(ui, l, ("cat", i), rect, c, view.category == i).clicked() {
-            view.category = i;
-        }
-    }
-    let cat = cats[view.category.min(cats.len() - 1)];
-    let items: Vec<(usize, String)> = host
-        .presets()
-        .iter()
-        .enumerate()
-        .filter(|(_, r)| r.category == cat)
-        .map(|(i, r)| (i, r.name.clone()))
-        .collect();
-    if items.is_empty() {
-        ui.painter().text(
-            l.p(BOARD.center().x, BOARD.center().y + 20.0),
-            Align2::CENTER_CENTER,
-            "no presets here yet. SAVE stores the current tone.",
-            l.f(10.0),
-            DIM,
-        );
-    }
-    let current = host.current();
-    let w = 270.0;
-    let mut load = None;
-    for (n, (i, name)) in items.iter().enumerate() {
-        let (c, row) = (n % 4, n / 4);
-        let rect = l.r(
-            BOARD.min.x + 10.0 + c as f32 * (w + 12.0),
-            BOARD.min.y + 62.0 + row as f32 * 40.0,
-            w,
-            34.0,
-        );
-        if button(
-            ui,
-            l,
-            ("p", *i),
-            rect,
-            &name.to_uppercase(),
-            current == Some(*i),
-        )
-        .clicked()
-        {
-            load = Some(*i);
-        }
-    }
-    if let Some(i) = load {
-        host.load_preset(i);
-        view.browser = false;
-    }
 }
 
 fn tuner(ui: &Ui, l: &L, host: &mut dyn Host) {
@@ -821,87 +970,6 @@ const RACK: Rect = Rect {
     },
 };
 const UNIT_W: f32 = 182.0;
-
-fn rack(ui: &Ui, l: &L, host: &mut dyn Host, view: &mut View) {
-    floor(ui, l, RACK, "EFFECTS");
-    let slots = host.rig().post.clone();
-    let mut remove = None;
-    for (i, s) in slots.iter().enumerate() {
-        let rect = l.r(
-            RACK.min.x + 8.0 + i as f32 * (UNIT_W + 8.0),
-            RACK.min.y + 18.0,
-            UNIT_W,
-            RACK.height() - 26.0,
-        );
-        let spec = s.kind.spec();
-        let resp = ui.interact(rect, Id::NULL.with(("unit", i)), Sense::click());
-        let painter = ui.painter();
-        let face = mix(rgb(spec.color), TOLEX, 0.45);
-        painter.rect_filled(rect, l.s(6.0), face);
-        painter.text(
-            rect.min + vec2(l.s(10.0), l.s(14.0)),
-            Align2::LEFT_CENTER,
-            spec.name,
-            l.f(11.0),
-            INK,
-        );
-        led(
-            ui,
-            l,
-            pos2(rect.max.x - l.s(16.0), rect.min.y + l.s(14.0)),
-            s.on,
-            GREEN,
-        );
-        let area = Rect::from_min_max(
-            rect.min + vec2(l.s(4.0), l.s(28.0)),
-            rect.max - vec2(l.s(4.0), l.s(8.0)),
-        );
-        let (points, radius) = knob_grid(spec.params.len(), area, l);
-        for (p_i, (p, c)) in spec.params.iter().zip(points).enumerate() {
-            if let Some(nv) = knob(ui, l, ("post", i, p_i), c, radius, p, s.value(p_i), face) {
-                host.rig().post[i].values[p_i] = nv;
-                host.set(Target::Post(i), p_i, nv);
-            }
-        }
-        let header = Rect::from_min_size(rect.min, vec2(rect.width(), l.s(26.0)));
-        let head = ui.interact(header, Id::NULL.with(("unit-head", i)), Sense::click());
-        if head.clicked() {
-            let on = !s.on;
-            host.rig().post[i].on = on;
-            host.enable(Target::Post(i), on);
-        }
-        if resp.secondary_clicked() || head.secondary_clicked() {
-            remove = Some(i);
-        }
-    }
-    if slots.len() < MAX_POST {
-        let x = RACK.min.x + 8.0 + slots.len() as f32 * (UNIT_W + 8.0);
-        if button(
-            ui,
-            l,
-            "add-post",
-            l.r(x, RACK.center().y - 25.0, UNIT_W, 50.0),
-            "+ EFFECT",
-            false,
-        )
-        .clicked()
-        {
-            view.adding = Some(true);
-            view.browser = false;
-        }
-    }
-    ui.painter().text(
-        l.p(RACK.max.x - 10.0, RACK.min.y + 8.0),
-        Align2::RIGHT_TOP,
-        "click a name to switch  right-click to remove",
-        l.f(7.5),
-        DIM,
-    );
-    if let Some(i) = remove {
-        host.rig().post.remove(i);
-        host.rebuild();
-    }
-}
 
 fn naming(ctx: &egui::Context, host: &mut dyn Host, view: &mut View) {
     let Some(mut name) = view.naming.take() else {

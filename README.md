@@ -22,17 +22,24 @@ riff is a guitar amp and effects app for metal. It plays your guitar from an aud
   - 2x12 open back
   - 1x12
 - Load your own impulse responses (WAV) into each mic.
-- Pedals: noise gate, boost, compressor, OD-9 (tube screamer style), RODENT (RAT style), SWEDISH (HM-2 style), wah, 10-band EQ and octave down.
-- Effects: chorus, phaser, flanger, delay (digital, analog, ping-pong), reverb (room, plate, hall), stereo doubler and a post EQ.
-- Factory presets in the style of Metallica, Dream Theater, Death, Avenged Sevenfold and Arch Enemy, plus some extras. The presets are a start point, not exact copies.
+- Pedals: noise gate, boost, compressor, OD-9 (tube screamer style), RODENT (RAT style), SWEDISH (HM-2 style), wah, 10-band EQ, octave down, TUNE (pitch shift and drop tune) and ACOUSTIC (acoustic guitar simulator).
+- Effects: chorus, phaser, flanger, delay (digital, analog, ping-pong), reverb (room, plate, hall), stereo doubler, post EQ, HARMONY (twin lead harmonizer) and tremolo.
+- Factory presets in the style of Metallica, Dream Theater, Death, Avenged Sevenfold and Arch Enemy, plus some extras. The presets are sorted by band, then by album, then by song or part:
+  - Metallica: Ride the Lightning, Master of Puppets, Metallica (Black Album), Death Magnetic
+  - Dream Theater: Train of Thought
+  - Death: Symbolic
+  - Avenged Sevenfold: City of Evil (with Bat Country), Avenged Sevenfold
+  - Arch Enemy: Rise of the Tyrant
+
+  Each preset has a note with tips, for example the tuning. The presets are a start point, not exact copies.
 - Save your own presets, compare two tones with A/B, and use the tuner.
 - MIDI: program change selects a preset. CC 11 (expression pedal) moves the wah.
 
 ## Build and run
 
 1. Install Rust.
-2. Run `./scripts/bundle.sh`.
-3. Open `target/riff.app`.
+2. Run `./scripts/install.sh`. The script builds riff and copies `riff.app` to Applications.
+3. Open riff from Applications.
 4. Allow microphone access when macOS asks. riff needs this access to read the audio interface.
 
 For development, run `cargo run --release -p riff-app`.
@@ -56,9 +63,12 @@ For development, run `cargo run --release -p riff-app`.
 - Click the preset name to see the presets. Use `<` and `>`, or the left and right arrow keys, to go to the previous or next preset.
 - Drag a knob up or down. Hold Shift for small changes. Double-click a knob to reset it. You can also use the mouse wheel on a knob.
 - Click the footswitch of a pedal to turn the pedal on or off.
-- Drag a pedal left or right to change the order. Right-click a pedal to remove it.
+- Drag a pedal left or right to change the order. Click the X on a pedal to remove it.
 - Click `+ PEDAL` or `+ EFFECT` to add one.
-- Click the name of an effect in the rack to turn it on or off. Right-click it to remove it.
+- Click the name of an effect in the rack to turn it on or off. Click the X to remove it.
+- In the presets, select a band, then an album, then a song.
+- TUNE is off in presets for songs in a lower tuning. Turn it on to play these songs with a guitar in E standard. Pitch shifting changes the tone a little. For the best sound, tune the guitar down.
+- HARMONY plays a second guitar line at a fixed interval. Set INTERVAL to fit the key of the solo.
 - Push T, or click TUNER, to tune. The tuner mutes the output.
 - Click SAVE to save the tone as a user preset. User presets go to `~/Music/riff/presets`.
 - Click A/B one time to store the current tone as A. Change the tone, then click A/B to switch between the two tones.
