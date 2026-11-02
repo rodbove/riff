@@ -3,11 +3,11 @@ use serde::{Deserialize, Serialize};
 use crate::biquad::{Biquad, Coefs};
 use crate::clip::{tanh, tube};
 use crate::fx::Mono;
-use crate::oversample::Oversampler;
+use crate::oversample::Oversampler8;
 use crate::param::Param;
 use crate::util::{Follower, Smooth, db};
 
-const OS: f32 = Oversampler::FACTOR as f32;
+const OS: f32 = Oversampler8::FACTOR as f32;
 const TARGET_RMS: f32 = 0.125;
 const CALIBRATE: usize = 12000;
 const MAX_STAGES: usize = 5;
@@ -285,13 +285,18 @@ struct StageState {
     shelf: Option<Biquad>,
     gain: f32,
     bias: f32,
+    shift: f32,
 }
+
+const SHIFT_DEPTH: f32 = 0.35;
+const SHIFT_ATTACK_MS: f32 = 3.0;
+const SHIFT_RELEASE_MS: f32 = 90.0;
 
 pub struct Amp {
     voicing: &'static Voicing,
     rate: f32,
     knobs: [f32; 8],
-    os: Oversampler,
+    os: Oversampler8,
     tight: Biquad,
     bright: Biquad,
     pre_gain: Smooth,
@@ -305,6 +310,11 @@ pub struct Amp {
     drive: Smooth,
     level: Smooth,
     sag: Follower,
+    shift_attack: f32,
+    shift_release: f32,
+    load_low: Biquad,
+    load_high: Biquad,
+    transformer: Biquad,
     trim: f32,
 }
 
@@ -322,13 +332,14 @@ impl Amp {
                     .map(|(hz, g)| Biquad::new(Coefs::low_shelf(hz, g, fast))),
                 gain: db(s.gain_db),
                 bias: s.bias,
+                shift: 0.0,
             };
         }
         let mut amp = Self {
             voicing: v,
             rate,
             knobs: std::array::from_fn(|i| PARAMS[i].default),
-            os: Oversampler::new(),
+            os: Oversampler8::new(),
             tight: Biquad::new(Coefs::highpass(v.tight, 0.707, fast)),
             bright: Biquad::default(),
             pre_gain: Smooth::new(1.0, 30.0, fast),
@@ -342,6 +353,11 @@ impl Amp {
             drive: Smooth::new(1.0, 30.0, fast),
             level: Smooth::new(1.0, 30.0, fast),
             sag: Follower::new(5.0, 80.0, fast),
+            shift_attack: 1.0 - (-1.0 / (SHIFT_ATTACK_MS * 0.001 * fast)).exp(),
+            shift_release: 1.0 - (-1.0 / (SHIFT_RELEASE_MS * 0.001 * fast)).exp(),
+            load_low: Biquad::new(Coefs::peak(110.0, 1.1, 3.0, fast)),
+            load_high: Biquad::new(Coefs::high_shelf(2800.0, 2.5, fast)),
+            transformer: Biquad::new(Coefs::lowpass(11000.0, 0.6, fast)),
             trim: 1.0,
         };
         for (i, p) in PARAMS.iter().enumerate() {
@@ -383,7 +399,7 @@ impl Amp {
     }
 
     fn reset(&mut self) {
-        self.os = Oversampler::new();
+        self.os = Oversampler8::new();
         self.tight.reset();
         self.bright.reset();
         for s in &mut self.stages {
@@ -392,6 +408,7 @@ impl Amp {
             if let Some(b) = s.shelf.as_mut() {
                 b.reset();
             }
+            s.shift = 0.0;
         }
         for b in [
             &mut self.bass,
@@ -399,6 +416,9 @@ impl Amp {
             &mut self.treble,
             &mut self.presence,
             &mut self.resonance,
+            &mut self.load_low,
+            &mut self.load_high,
+            &mut self.transformer,
         ] {
             b.reset();
         }
@@ -471,6 +491,11 @@ impl Amp {
             level,
             sag,
             trim,
+            shift_attack,
+            shift_release,
+            load_low,
+            load_high,
+            transformer,
             ..
         } = self;
         let early = voicing.stack.early;
@@ -486,7 +511,16 @@ impl Amp {
                 if let Some(b) = st.shelf.as_mut() {
                     s = b.process(s);
                 }
-                s = tube(s * st.gain, st.bias);
+                let drive = s * st.gain;
+                let bias = st.bias - st.shift;
+                s = tube(drive, bias);
+                let over = ((drive + bias).max(0.0) * SHIFT_DEPTH).min(1.5);
+                let c = if over > st.shift {
+                    *shift_attack
+                } else {
+                    *shift_release
+                };
+                st.shift += (over - st.shift) * c;
                 s = st.lp.process(s) * 0.5;
             }
             if !early {
@@ -496,7 +530,8 @@ impl Amp {
             let d = drive.tick() * (1.0 - sag_amount * sag.level().min(1.0));
             let p = tanh(s * d);
             sag.process(p);
-            p * level.tick()
+            let p = load_high.process(load_low.process(p));
+            transformer.process(p) * level.tick()
         });
         y * *trim
     }
@@ -562,16 +597,51 @@ mod tests {
         #[test]
         fn more_gain_means_more_distortion() {
             for m in [AmpModel::Brit, AmpModel::Recto, AmpModel::Block] {
-                let crest = |gain: f32| {
+                let thd = |gain: f32| {
                     let mut a = Amp::new(m, &[gain], RATE);
-                    let out: Vec<f32> = (0..24000).map(|i| a.process(chord(i))).collect();
+                    let hz = 220.0;
+                    let out: Vec<f32> = (0..24000)
+                        .map(|i| a.process((i as f32 * hz * TAU / RATE).sin() * 0.2))
+                        .collect();
                     let tail = &out[12000..];
-                    let peak = tail.iter().fold(0.0f32, |p, v| p.max(v.abs()));
-                    let r = (tail.iter().map(|v| v * v).sum::<f32>() / tail.len() as f32).sqrt();
-                    peak / r
+                    let (mut re, mut im) = (0.0f64, 0.0f64);
+                    for (n, v) in tail.iter().enumerate() {
+                        let w = std::f64::consts::TAU * hz as f64 * n as f64 / RATE as f64;
+                        re += *v as f64 * w.cos();
+                        im += *v as f64 * w.sin();
+                    }
+                    let fundamental = 2.0 * (re * re + im * im) / (tail.len() as f64).powi(2);
+                    let total =
+                        tail.iter().map(|v| (*v as f64).powi(2)).sum::<f64>() / tail.len() as f64;
+                    1.0 - (fundamental / total).min(1.0)
                 };
-                assert!(crest(10.0) < crest(0.0), "{m:?}");
+                assert!(thd(10.0) > thd(0.0), "{m:?}");
             }
+        }
+    }
+
+    mod when_picking_hard {
+        use super::*;
+
+        #[test]
+        fn the_amp_sags_after_a_loud_hit_and_recovers() {
+            let mut a = Amp::new(AmpModel::Brit, &[3.0], RATE);
+            let tone = |i: usize, level: f32| (i as f32 * 196.0 * TAU / RATE).sin() * level;
+            for i in 0..9600 {
+                a.process(tone(i, 0.8));
+            }
+            let window = |a: &mut Amp, start: usize| {
+                let v: Vec<f32> = (start..start + 2400)
+                    .map(|i| a.process(tone(i, 0.05)))
+                    .collect();
+                (v.iter().map(|x| x * x).sum::<f32>() / v.len() as f32).sqrt()
+            };
+            let right_after = window(&mut a, 9600);
+            for i in 12000..36000 {
+                a.process(tone(i, 0.05));
+            }
+            let later = window(&mut a, 36000);
+            assert!(later > right_after * 1.03, "{right_after} {later}");
         }
     }
 

@@ -90,8 +90,44 @@ impl CabModel {
         }
     }
 
+    fn breakup(self) -> &'static [(f32, f32, f32)] {
+        match self {
+            CabModel::V30 => &[
+                (1800.0, 3.0, 2.0),
+                (2700.0, 4.0, 4.0),
+                (3400.0, 6.0, -6.0),
+                (4300.0, 5.0, 5.0),
+                (5200.0, 6.0, -8.0),
+                (6400.0, 5.0, 3.0),
+            ],
+            CabModel::Greenback => &[
+                (1400.0, 3.0, 2.5),
+                (2200.0, 5.0, -4.0),
+                (2900.0, 4.0, 3.0),
+                (3700.0, 6.0, -6.0),
+                (4600.0, 5.0, 2.0),
+            ],
+            CabModel::OpenBack => &[
+                (1900.0, 3.0, 2.0),
+                (3100.0, 5.0, -4.0),
+                (4200.0, 4.0, 3.0),
+                (5600.0, 6.0, -5.0),
+            ],
+            CabModel::Single => &[
+                (1500.0, 3.0, 2.0),
+                (2600.0, 5.0, -5.0),
+                (3500.0, 4.0, 3.0),
+                (4800.0, 6.0, -6.0),
+            ],
+        }
+    }
+
     pub fn render(self, off_axis: bool, rate: f32) -> Vec<f32> {
         let mut shapes = self.shapes();
+        let (shift, depth) = if off_axis { (0.92, 0.7) } else { (1.0, 1.0) };
+        for (hz, q, g) in self.breakup() {
+            shapes.push(Shape::Peak(hz * shift, *q, g * depth));
+        }
         let lp_scale = if off_axis { 0.8 } else { 1.15 };
         for s in &mut shapes {
             if let Shape::Lp(hz, _) = s {
@@ -124,6 +160,24 @@ impl CabModel {
                 x
             })
             .collect();
+        let back = (if off_axis { 0.55 } else { 0.42 }) * 0.001 * rate;
+        let back = back as usize;
+        let direct = ir.clone();
+        for i in back..ir.len() {
+            ir[i] -= 0.18 * direct[i - back];
+        }
+        let reflections = [(2.3, 0.06), (3.9, -0.04), (6.1, 0.03), (9.7, 0.02)];
+        let mut room = vec![0.0f32; ir.len()];
+        for (ms, gain) in reflections {
+            let d = (ms * 0.001 * rate) as usize;
+            for i in d..ir.len() {
+                room[i] += gain * direct[i - d];
+            }
+        }
+        let mut air = crate::util::OnePole::new(4000.0, rate);
+        for (v, r) in ir.iter_mut().zip(room) {
+            *v += air.low(r);
+        }
         normalize(&mut ir);
         ir
     }

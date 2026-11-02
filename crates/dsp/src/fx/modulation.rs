@@ -174,19 +174,39 @@ pub struct Doubler {
     lfo: Lfo,
     delay: Smooth,
     width: Smooth,
+    seed: u32,
+    target: f32,
+    drift: f32,
+    count: u32,
+    tone: crate::util::OnePole,
 }
+
+const DRIFT_MS: f32 = 2.5;
+const DRIFT_EVERY_S: f32 = 0.35;
 
 impl Doubler {
     pub fn new(rate: f32) -> Self {
         let mut lfo = Lfo::new(0.0);
-        lfo.tune(0.3, rate);
+        lfo.tune(0.23, rate);
         Self {
             rate,
             line: line(rate),
             lfo,
             delay: Smooth::new(18.0, 50.0, rate),
             width: Smooth::new(0.8, 20.0, rate),
+            seed: 0x1234_5678,
+            target: 0.0,
+            drift: 0.0,
+            count: 0,
+            tone: crate::util::OnePole::new(7000.0, rate),
         }
+    }
+
+    fn random(&mut self) -> f32 {
+        self.seed ^= self.seed << 13;
+        self.seed ^= self.seed >> 17;
+        self.seed ^= self.seed << 5;
+        (self.seed >> 8) as f32 / (1u32 << 24) as f32 * 2.0 - 1.0
     }
 }
 
@@ -201,8 +221,16 @@ impl Stereo for Doubler {
     fn process(&mut self, x: [f32; 2]) -> [f32; 2] {
         let mono = 0.5 * (x[0] + x[1]);
         self.line.push(mono);
-        let d = (self.delay.tick() + self.lfo.tick()) * 0.001 * self.rate;
-        let copy = self.line.read(d);
+        if self.count == 0 {
+            self.target = self.random();
+            self.count = (DRIFT_EVERY_S * self.rate) as u32;
+        }
+        self.count -= 1;
+        self.drift += (self.target - self.drift) * (4.0 / (DRIFT_EVERY_S * self.rate));
+        let ms = self.delay.tick() + self.drift * DRIFT_MS + self.lfo.tick() * 0.6;
+        let copy = self
+            .tone
+            .low(self.line.read(ms.max(1.0) * 0.001 * self.rate));
         let w = self.width.tick();
         [x[0], x[1] + (copy - x[1]) * w]
     }

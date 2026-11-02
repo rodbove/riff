@@ -153,6 +153,39 @@ impl Oversampler {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct Oversampler8 {
+    inner: Oversampler,
+    up: Half,
+    down: Half,
+}
+
+impl Default for Oversampler8 {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Oversampler8 {
+    pub const FACTOR: usize = 8;
+
+    pub fn new() -> Self {
+        Self {
+            inner: Oversampler::new(),
+            up: Half::new(),
+            down: Half::new(),
+        }
+    }
+
+    pub fn process(&mut self, x: f32, mut f: impl FnMut(f32) -> f32) -> f32 {
+        let Self { inner, up, down } = self;
+        inner.process(x, |s| {
+            let [a, b] = up.up(s);
+            down.down([f(a), f(b)])
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
