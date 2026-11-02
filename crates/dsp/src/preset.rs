@@ -3,12 +3,13 @@ use crate::cab::{CabModel, CabState};
 use crate::fx::Kind;
 use crate::rig::{AmpState, GateState, Rig, Slot};
 
-pub const BANDS: [&str; 6] = [
+pub const BANDS: [&str; 7] = [
     "METALLICA",
     "DREAM THEATER",
     "DEATH",
     "AVENGED SEVENFOLD",
     "ARCH ENEMY",
+    "METALCORE",
     "EXTRAS",
 ];
 pub const USER: &str = "USER";
@@ -239,6 +240,14 @@ const TRIMS: &[(&str, f32)] = &[
     ("Amott Lead", -8e+00),
     ("Swedish Death", -8e+00),
     ("Clean Room", 4e+00),
+    ("One Clean", 7e+00),
+    ("One Solo", -4e+00),
+    ("Harvester of Sorrow", -4e+00),
+    ("To Live Is to Die Clean", 8e+00),
+    ("We Will Rise Solo", -9e+00),
+    ("Clean Arpeggios", 7e+00),
+    ("Melodic Lead", -8e+00),
+    ("Ambient Clean", 6e+00),
 ];
 
 pub fn factory() -> Vec<Rig> {
@@ -795,8 +804,192 @@ fn bank() -> Vec<Rig> {
             ),
         ],
     ));
+    let ajfa = "Very scooped and dry. Tight and hard picking. E standard.";
+    let justice = |name: &'static str, gain: f32, depth: f32| {
+        part(
+            name,
+            ajfa,
+            -48.0,
+            vec![od(0.5, 6.5, 8.0)],
+            amp(Mark, [gain, 4.5, 3.5, 7.0, 6.5, 6.0, 5.0, 0.0]),
+            cab(CabModel::V30, 0.25, 90.0, 8500.0),
+            vec![v_curve(depth), doubler(0.75)],
+        )
+    };
+    out.extend(album(
+        BANDS[0],
+        "...And Justice for All",
+        vec![
+            justice("Blackened", 7.5, 1.4),
+            justice("...And Justice for All", 7.0, 1.4),
+            justice("Eye of the Beholder", 7.0, 1.3),
+            clean(
+                "One Clean",
+                "Clean intro and verses. Use the neck pickup.",
+                1.0,
+                vec![
+                    chorus(0.5, 0.35, 0.3),
+                    delay(420.0, 0.25, 0.18, DIGITAL),
+                    verb(HALL, 2.4, 0.2),
+                ],
+            ),
+            justice("One Heavy", 7.5, 1.4),
+            lead(
+                "One Solo",
+                "Fast lead over the machine gun section.",
+                vec![od(2.0, 6.0, 7.0)],
+                Mark,
+                [8.0, 4.5, 6.0, 6.5, 6.0, 5.0, 5.0, 0.0],
+                vec![delay(360.0, 0.25, 0.18, ANALOG), verb(PLATE, 1.6, 0.12)],
+            ),
+            justice("The Shortest Straw", 7.0, 1.3),
+            justice("Harvester of Sorrow", 6.5, 1.2),
+            justice("The Frayed Ends of Sanity", 7.0, 1.3),
+            clean(
+                "To Live Is to Die Clean",
+                "Clean arpeggios with a slow chorus.",
+                1.0,
+                vec![
+                    chorus(0.4, 0.45, 0.35),
+                    delay(500.0, 0.3, 0.2, DIGITAL),
+                    verb(HALL, 3.0, 0.25),
+                ],
+            ),
+            justice("Dyers Eve", 8.0, 1.4),
+            lead(
+                "Kirk Lead AJFA",
+                "Wah lead. Move the PEDAL knob or use CC 11.",
+                vec![wah(0.6), od(2.0, 6.0, 6.0)],
+                Mark,
+                [8.0, 4.5, 6.0, 6.5, 6.0, 5.0, 5.0, 0.0],
+                vec![delay(360.0, 0.25, 0.15, ANALOG), verb(PLATE, 1.5, 0.12)],
+            ),
+        ],
+    ));
+    let anthems = "C standard. Turn on TUNE to play it with a guitar in E standard.";
+    let anthem = |name: &'static str, gain: f32, mid: f32, gate: f32| {
+        part(
+            name,
+            anthems,
+            gate,
+            vec![tune(-4.0), od(1.0, 5.5, 8.0)],
+            amp(Block, [gain, 6.0, mid, 6.0, 6.0, 6.0, 5.0, 0.0]),
+            cab(CabModel::V30, 0.3, 75.0, 8800.0),
+            vec![doubler(0.8)],
+        )
+    };
+    let anthem_lead = |name: &'static str, note: &'static str, post: Vec<Slot>| {
+        lead(
+            name,
+            note,
+            vec![tune(-4.0), od(2.5, 6.0, 8.0)],
+            Block,
+            [7.5, 5.0, 7.0, 6.0, 5.5, 5.0, 5.0, 0.0],
+            post,
+        )
+    };
+    out.extend(album(
+        BANDS[4],
+        "Anthems of Rebellion",
+        vec![
+            anthem("Silent Wars", 7.0, 5.5, -52.0),
+            anthem("We Will Rise", 6.5, 6.0, -55.0),
+            anthem("Dead Bury Their Dead", 7.0, 5.5, -52.0),
+            anthem("End of the Line", 6.5, 6.0, -55.0),
+            anthem("Dehumanization", 7.0, 5.0, -50.0),
+            anthem("Leader of the Rats", 6.5, 6.0, -55.0),
+            anthem_lead(
+                "We Will Rise Solo",
+                "Twin lead. HARMONY plays a minor third up. Change INTERVAL to fit the key.",
+                vec![
+                    harmony(MINOR_THIRD, 0.6),
+                    delay(420.0, 0.35, 0.22, ANALOG),
+                    verb(HALL, 2.4, 0.2),
+                ],
+            ),
+            anthem_lead(
+                "Marching on a Dead End Road",
+                "Instrumental melody lead.",
+                vec![delay(450.0, 0.4, 0.25, ANALOG), verb(HALL, 2.8, 0.22)],
+            ),
+        ],
+    ));
+    let core = "Drop C (C G C F A D). With a guitar in drop D, turn on TUNE.";
+    let mut tight = rhythm(
+        "Breakdown Chug",
+        "Very tight low end for palm-muted breakdowns. Drop C.",
+        -45.0,
+        0.0,
+        Block,
+        [6.5, 5.5, 5.5, 6.5, 6.5, 5.0, 5.0, 0.0],
+        0.9,
+    );
+    tight.pre.insert(0, tune(-2.0));
+    tight.cab = cab(CabModel::V30, 0.3, 100.0, 9000.0);
+    let core_rhythm = |name: &'static str, model: AmpModel, gain: f32, mid: f32| {
+        part(
+            name,
+            core,
+            -50.0,
+            vec![tune(-2.0), od(0.0, 6.5, 9.0)],
+            amp(model, [gain, 5.5, mid, 6.5, 6.5, 5.5, 5.0, 0.0]),
+            cab(CabModel::V30, 0.3, 95.0, 9000.0),
+            vec![doubler(0.9)],
+        )
+    };
+    let mut core_clean = clean(
+        "Clean Arpeggios",
+        "Clean verses and intros with a wide chorus.",
+        0.0,
+        clean_post(),
+    );
+    core_clean.pre.insert(0, tune(-2.0));
     out.extend(album(
         BANDS[5],
+        "Killswitch Style",
+        vec![
+            core_rhythm("Verse Riffs", Recto, 6.5, 5.5),
+            core_rhythm("Big Chorus", Recto, 6.0, 6.0),
+            tight,
+            core_clean,
+            part(
+                "Melodic Lead",
+                "Melodic lead with a harmony a third up. Change INTERVAL to fit the key.",
+                -58.0,
+                vec![tune(-2.0), od(1.0, 6.0, 8.0)],
+                amp(Uber, [7.0, 5.0, 6.5, 6.0, 6.0, 5.0, 5.0, 0.0]),
+                heavy_cab(),
+                vec![
+                    harmony(MAJOR_THIRD, 0.5),
+                    delay(380.0, 0.35, 0.22, PING_PONG),
+                    verb(HALL, 2.4, 0.2),
+                ],
+            ),
+        ],
+    ));
+    out.extend(album(
+        BANDS[5],
+        "Modern Toolkit",
+        vec![
+            core_rhythm("Modern Rhythm 5150 Style", Block, 6.5, 5.5),
+            core_rhythm("Modern Rhythm Recto Style", Recto, 6.5, 5.0),
+            part(
+                "Ambient Clean",
+                "Clean with long delay and reverb for intros.",
+                0.0,
+                vec![comp()],
+                amp(Clean, [3.0, 5.0, 5.5, 6.0, 5.0, 5.0, 5.0, 0.0]),
+                open_cab(),
+                vec![
+                    chorus(0.4, 0.35, 0.3),
+                    delay(520.0, 0.45, 0.3, PING_PONG),
+                    verb(HALL, 5.0, 0.35),
+                ],
+            ),
+        ],
+    ));
+    out.extend(album(
+        BANDS[6],
         "Extras",
         vec![
             part(

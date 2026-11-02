@@ -25,11 +25,12 @@ riff is a guitar amp and effects app for metal. It plays your guitar from an aud
 - Pedals: noise gate, boost, compressor, OD-9 (tube screamer style), RODENT (RAT style), SWEDISH (HM-2 style), wah, 10-band EQ, octave down, TUNE (pitch shift and drop tune) and ACOUSTIC (acoustic guitar simulator).
 - Effects: chorus, phaser, flanger, delay (digital, analog, ping-pong), reverb (room, plate, hall), stereo doubler, post EQ, HARMONY (twin lead harmonizer) and tremolo.
 - Factory presets in the style of Metallica, Dream Theater, Death, Avenged Sevenfold and Arch Enemy, plus some extras. The presets are sorted by band, then by album, then by song or part:
-  - Metallica: Ride the Lightning, Master of Puppets, Metallica (Black Album), Death Magnetic
+  - Metallica: Ride the Lightning, Master of Puppets, ...And Justice for All, Metallica (Black Album), Death Magnetic
   - Dream Theater: Train of Thought
   - Death: Symbolic
   - Avenged Sevenfold: City of Evil (with Bat Country), Avenged Sevenfold
-  - Arch Enemy: Rise of the Tyrant
+  - Arch Enemy: Anthems of Rebellion, Rise of the Tyrant
+  - Metalcore: Killswitch style (drop C), modern rhythm and ambient clean tones
 
   Each preset has a note with tips, for example the tuning. The presets are a start point, not exact copies.
 - Save your own presets, compare two tones with A/B, and use the tuner.
