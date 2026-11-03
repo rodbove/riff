@@ -127,9 +127,9 @@ const BRIT: Voicing = Voicing {
     tight: 60.0,
     gain_range: (0.0, 24.0),
     stages: &[
-        shelved(stage(14.0, 0.2, 60.0, 10000.0), 150.0, 2.0),
-        stage(16.0, 0.15, 80.0, 8000.0),
-        stage(12.0, 0.1, 40.0, 7000.0),
+        stage(12.0, 0.2, 80.0, 12000.0),
+        shelved(stage(12.0, 0.15, 100.0, 11000.0), 300.0, -6.0),
+        stage(8.0, 0.1, 60.0, 9500.0),
     ],
     stack: Stack {
         early: false,
@@ -141,7 +141,7 @@ const BRIT: Voicing = Voicing {
     },
     power: Power {
         drive_db: 3.0,
-        sag: 0.3,
+        sag: 0.2,
         presence_hz: 3500.0,
         resonance_hz: 100.0,
     },
@@ -153,10 +153,10 @@ const MARK: Voicing = Voicing {
     tight: 120.0,
     gain_range: (0.0, 26.0),
     stages: &[
-        shelved(stage(16.0, 0.25, 120.0, 9000.0), 200.0, -3.0),
-        stage(18.0, 0.2, 100.0, 8000.0),
-        stage(18.0, 0.15, 80.0, 7000.0),
-        stage(14.0, 0.1, 60.0, 6500.0),
+        shelved(stage(14.0, 0.25, 130.0, 12000.0), 250.0, -4.0),
+        shelved(stage(13.0, 0.2, 110.0, 11000.0), 300.0, -6.0),
+        stage(12.0, 0.15, 80.0, 10000.0),
+        stage(8.0, 0.1, 60.0, 9000.0),
     ],
     stack: Stack {
         early: true,
@@ -177,13 +177,13 @@ const MARK: Voicing = Voicing {
 const RECTO: Voicing = Voicing {
     name: "RECTO",
     like: "Mesa Dual Rectifier modern channel",
-    tight: 70.0,
-    gain_range: (0.0, 28.0),
+    tight: 95.0,
+    gain_range: (0.0, 23.0),
     stages: &[
-        shelved(stage(18.0, 0.3, 70.0, 8000.0), 150.0, 3.0),
-        stage(18.0, 0.2, 60.0, 7000.0),
-        stage(16.0, 0.2, 50.0, 7000.0),
-        stage(12.0, 0.1, 40.0, 6000.0),
+        stage(12.0, 0.3, 90.0, 12000.0),
+        shelved(stage(13.0, 0.2, 110.0, 11000.0), 300.0, -6.0),
+        shelved(stage(12.0, 0.2, 80.0, 10000.0), 250.0, -4.0),
+        stage(8.0, 0.1, 50.0, 9000.0),
     ],
     stack: Stack {
         early: false,
@@ -195,7 +195,7 @@ const RECTO: Voicing = Voicing {
     },
     power: Power {
         drive_db: 6.0,
-        sag: 0.45,
+        sag: 0.18,
         presence_hz: 3200.0,
         resonance_hz: 85.0,
     },
@@ -207,10 +207,10 @@ const BLOCK: Voicing = Voicing {
     tight: 100.0,
     gain_range: (0.0, 26.0),
     stages: &[
-        shelved(stage(20.0, 0.3, 100.0, 8500.0), 180.0, -2.0),
-        stage(18.0, 0.25, 90.0, 7500.0),
-        stage(16.0, 0.2, 70.0, 7000.0),
-        stage(12.0, 0.15, 50.0, 6500.0),
+        shelved(stage(15.0, 0.3, 120.0, 12000.0), 250.0, -4.0),
+        shelved(stage(13.0, 0.25, 110.0, 11000.0), 300.0, -6.0),
+        stage(12.0, 0.2, 80.0, 10000.0),
+        stage(8.0, 0.15, 60.0, 9000.0),
     ],
     stack: Stack {
         early: false,
@@ -234,11 +234,11 @@ const UBER: Voicing = Voicing {
     tight: 110.0,
     gain_range: (0.0, 24.0),
     stages: &[
-        shelved(stage(18.0, 0.3, 110.0, 9000.0), 200.0, -2.0),
-        stage(18.0, 0.25, 90.0, 8000.0),
-        stage(16.0, 0.2, 70.0, 7500.0),
-        stage(14.0, 0.2, 60.0, 7000.0),
-        stage(10.0, 0.1, 50.0, 6500.0),
+        shelved(stage(14.0, 0.3, 120.0, 12000.0), 250.0, -4.0),
+        shelved(stage(12.0, 0.25, 110.0, 11000.0), 300.0, -6.0),
+        stage(11.0, 0.2, 80.0, 10500.0),
+        stage(9.0, 0.2, 70.0, 10000.0),
+        stage(6.0, 0.1, 60.0, 9000.0),
     ],
     stack: Stack {
         early: false,
@@ -288,9 +288,9 @@ struct StageState {
     shift: f32,
 }
 
-const SHIFT_DEPTH: f32 = 0.35;
+const SHIFT_DEPTH: f32 = 0.15;
 const SHIFT_ATTACK_MS: f32 = 3.0;
-const SHIFT_RELEASE_MS: f32 = 90.0;
+const SHIFT_RELEASE_MS: f32 = 40.0;
 
 pub struct Amp {
     voicing: &'static Voicing,
@@ -514,7 +514,7 @@ impl Amp {
                 let drive = s * st.gain;
                 let bias = st.bias - st.shift;
                 s = tube(drive, bias);
-                let over = ((drive + bias).max(0.0) * SHIFT_DEPTH).min(1.5);
+                let over = ((drive + bias).max(0.0) * SHIFT_DEPTH).min(0.6);
                 let c = if over > st.shift {
                     *shift_attack
                 } else {
@@ -625,20 +625,23 @@ mod tests {
 
         #[test]
         fn the_amp_sags_after_a_loud_hit_and_recovers() {
-            let mut a = Amp::new(AmpModel::Brit, &[3.0], RATE);
+            let mut a = Amp::new(AmpModel::Brit, &[3.0, 5.0, 5.0, 5.0, 5.0, 5.0, 10.0], RATE);
             let tone = |i: usize, level: f32| (i as f32 * 196.0 * TAU / RATE).sin() * level;
             for i in 0..9600 {
                 a.process(tone(i, 0.8));
             }
             let window = |a: &mut Amp, start: usize| {
                 let v: Vec<f32> = (start..start + 2400)
-                    .map(|i| a.process(tone(i, 0.05)))
+                    .map(|i| a.process(tone(i, 0.01)))
                     .collect();
                 (v.iter().map(|x| x * x).sum::<f32>() / v.len() as f32).sqrt()
             };
-            let right_after = window(&mut a, 9600);
-            for i in 12000..36000 {
-                a.process(tone(i, 0.05));
+            for i in 9600..10800 {
+                a.process(tone(i, 0.01));
+            }
+            let right_after = window(&mut a, 10800);
+            for i in 13200..36000 {
+                a.process(tone(i, 0.01));
             }
             let later = window(&mut a, 36000);
             assert!(later > right_after * 1.03, "{right_after} {later}");
