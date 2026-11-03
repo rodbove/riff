@@ -25,28 +25,12 @@ impl Library {
 }
 
 pub fn load_ir(path: &Path, rate: f32) -> Result<Vec<f32>, String> {
-    let mut reader = hound::WavReader::open(path).map_err(|e| e.to_string())?;
-    let spec = reader.spec();
-    let channels = spec.channels.max(1) as usize;
-    let samples: Vec<f32> = match spec.sample_format {
-        hound::SampleFormat::Float => reader
-            .samples::<f32>()
-            .collect::<Result<_, _>>()
-            .map_err(|e| e.to_string())?,
-        hound::SampleFormat::Int => {
-            let scale = 1.0 / (1u64 << (spec.bits_per_sample.max(1) - 1)) as f32;
-            reader
-                .samples::<i32>()
-                .map(|s| s.map(|v| v as f32 * scale))
-                .collect::<Result<_, _>>()
-                .map_err(|e| e.to_string())?
-        }
-    };
-    let mono: Vec<f32> = samples.chunks(channels).map(|f| f[0]).collect();
+    let audio = crate::wav::read(path)?;
+    let mono = audio.mono();
     if mono.is_empty() {
         return Err("empty impulse response".into());
     }
-    let mut ir = resample(&mono, spec.sample_rate as f32, rate);
+    let mut ir = resample(&mono, audio.rate as f32, rate);
     ir.truncate((IR_SECONDS * rate) as usize);
     normalize(&mut ir);
     Ok(ir)

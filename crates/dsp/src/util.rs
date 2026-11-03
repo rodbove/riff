@@ -41,6 +41,10 @@ impl Smooth {
         self.target
     }
 
+    pub fn value(&self) -> f32 {
+        self.value
+    }
+
     pub fn tick(&mut self) -> f32 {
         self.value += (self.target - self.value) * self.coef;
         self.value

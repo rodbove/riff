@@ -64,9 +64,22 @@ impl Host for App {
 
     fn messages(&self) -> Vec<String> {
         let mut out: Vec<String> = self.toast.iter().map(|(t, _)| t.clone()).collect();
+        if let Some(t) = &self.take {
+            let s = t.seconds() as u32;
+            out.push(format!(
+                "RECORDING {}:{:02}  press REC to stop",
+                s / 60,
+                s % 60
+            ));
+        }
         out.extend(self.warnings.iter().cloned());
         if let Some(e) = &self.error {
             out.push(e.clone());
+        }
+        if self.audio.as_ref().and_then(|a| a.realtime()) == Some(false) {
+            out.push(
+                "The audio thread is not realtime, so expect crackles. See the README.".into(),
+            );
         }
         out
     }
@@ -101,18 +114,35 @@ impl Host for App {
     fn status(&self) -> String {
         match &self.audio {
             Some(a) => format!(
-                "{} input {}  >  {}   {} Hz   buffer {}   about {:.1} ms   dropouts {}   midi {}",
+                "{} input {}  >  {}   {} Hz   buffer {}   about {:.1} ms   dropouts {}{}   midi {}",
                 a.input,
                 a.channel + 1,
                 a.output,
                 a.rate,
-                self.settings.buffer,
+                a.buffer,
                 a.latency_ms,
                 a.dropouts.load(std::sync::atomic::Ordering::Relaxed),
+                match a.realtime() {
+                    Some(true) => "   realtime",
+                    Some(false) => "   NOT REALTIME",
+                    None => "",
+                },
                 self.midi.port.as_deref().unwrap_or("none")
             ),
             None => "no audio device. Open SETUP.".into(),
         }
+    }
+
+    fn recording(&self) -> Option<bool> {
+        Some(self.take.is_some())
+    }
+
+    fn toggle_record(&mut self) {
+        App::toggle_record(self);
+    }
+
+    fn reamp(&mut self) {
+        App::reamp(self);
     }
 
     fn setup(&mut self) -> bool {

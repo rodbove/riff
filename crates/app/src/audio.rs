@@ -1,58 +1,111 @@
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicU8, AtomicU32, Ordering};
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{FromSample, SizedSample};
 use riff_dsp::{Chain, Remote, Runner, live};
 use rtrb::{Consumer, Producer, RingBuffer};
 
-use crate::settings::Settings;
+use crate::settings::{Backend, Settings};
 
 const SCRATCH: usize = 4096;
+
+/// Whether the audio thread runs with realtime priority: not known yet, yes, or no.
+pub const REALTIME_YES: u8 = 1;
+pub const REALTIME_NO: u8 = 2;
 
 pub struct Audio {
     pub remote: Remote,
     pub rate: u32,
+    pub buffer: u32,
     pub input: String,
     pub output: String,
     pub channel: usize,
     pub latency_ms: f32,
     pub dropouts: Arc<AtomicU32>,
-    _input: cpal::Stream,
-    _output: cpal::Stream,
+    pub realtime: Arc<AtomicU8>,
+    pub(crate) _streams: Box<dyn std::any::Any>,
+}
+
+impl Audio {
+    pub fn realtime(&self) -> Option<bool> {
+        match self.realtime.load(Ordering::Relaxed) {
+            REALTIME_YES => Some(true),
+            REALTIME_NO => Some(false),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Device {
+    pub name: String,
+    pub channels: usize,
+}
+
+/// Input devices with their channel counts, and output devices.
+pub fn devices(backend: Backend) -> (Vec<Device>, Vec<String>) {
+    #[cfg(target_os = "linux")]
+    if backend == Backend::Jack {
+        return crate::jack_audio::list();
+    }
+    let _ = backend;
+    let host = cpal::default_host();
+    let inputs = unique(
+        host.input_devices()
+            .map(|d| d.collect::<Vec<_>>())
+            .unwrap_or_default()
+            .iter()
+            .filter(|d| listed(d))
+            .map(|d| Device {
+                name: name(d),
+                channels: max_channels(d, true),
+            })
+            .collect(),
+        |d| &d.name,
+    );
+    let outputs = unique(
+        host.output_devices()
+            .map(|d| d.collect::<Vec<_>>())
+            .unwrap_or_default()
+            .iter()
+            .filter(|d| listed(d))
+            .map(name)
+            .collect(),
+        |n| n,
+    );
+    (inputs, outputs)
+}
+
+fn unique<T>(mut items: Vec<T>, key: impl Fn(&T) -> &String) -> Vec<T> {
+    let mut seen = std::collections::HashSet::new();
+    items.retain(|i| seen.insert(key(i).clone()));
+    items
+}
+
+fn alsa_id(device: &cpal::Device) -> Option<String> {
+    let id = device.id().ok()?.to_string();
+    id.strip_prefix("alsa:").map(str::to_string)
+}
+
+/// ALSA lists every card many times (sysdefault, front, surround, hdmi, hw, plughw). Keep the
+/// PipeWire and default routes, plus one direct `hw:` entry per device.
+fn listed(device: &cpal::Device) -> bool {
+    match alsa_id(device) {
+        Some(id) => id == "pipewire" || id == "default" || id.starts_with("hw:"),
+        None => true,
+    }
 }
 
 fn name(device: &cpal::Device) -> String {
-    device
+    let base = device
         .description()
         .map(|d| d.name().to_string())
-        .unwrap_or_else(|_| "unknown".into())
-}
-
-pub fn input_devices() -> Vec<(String, usize)> {
-    let host = cpal::default_host();
-    let mut out: Vec<(String, usize)> = host
-        .input_devices()
-        .map(|d| d.collect::<Vec<_>>())
-        .unwrap_or_default()
-        .iter()
-        .map(|d| (name(d), max_channels(d, true)))
-        .collect();
-    out.dedup_by(|a, b| a.0 == b.0);
-    out
-}
-
-pub fn output_devices() -> Vec<String> {
-    let host = cpal::default_host();
-    let mut out: Vec<String> = host
-        .output_devices()
-        .map(|d| d.collect::<Vec<_>>())
-        .unwrap_or_default()
-        .iter()
-        .map(name)
-        .collect();
-    out.dedup();
-    out
+        .unwrap_or_else(|_| "unknown".into());
+    match alsa_id(device) {
+        Some(id) if id.starts_with("hw:") => format!("{base} ({id})"),
+        _ => base,
+    }
 }
 
 fn max_channels(device: &cpal::Device, input: bool) -> usize {
@@ -69,9 +122,22 @@ fn max_channels(device: &cpal::Device, input: bool) -> usize {
     };
     configs
         .iter()
-        .map(|c| c.channels() as usize)
+        .map(|c| channel_rank(device, input, c.channels()))
         .max()
+        .map(|(_, c)| c as usize)
         .unwrap_or(1)
+}
+
+/// Software devices (PipeWire's ALSA plugin, `default`) offer up to 64 channels that do not
+/// exist. Treat them as stereo. Outputs also prefer stereo; real inputs keep every channel so
+/// the guitar jack can be chosen.
+fn channel_rank(device: &cpal::Device, input: bool, channels: u16) -> (bool, u16) {
+    let virtual_device = alsa_id(device).is_some_and(|id| !id.starts_with("hw:"));
+    if !input || virtual_device {
+        (channels == 2, channels.min(2))
+    } else {
+        (true, channels)
+    }
 }
 
 fn find(wanted: Option<&str>, input: bool) -> Option<cpal::Device> {
@@ -85,7 +151,7 @@ fn find(wanted: Option<&str>, input: bool) -> Option<cpal::Device> {
         if let Some(d) = devices
             .unwrap_or_default()
             .into_iter()
-            .find(|d| name(d) == w)
+            .find(|d| listed(d) && name(d) == w)
         {
             return Some(d);
         }
@@ -99,11 +165,16 @@ fn find(wanted: Option<&str>, input: bool) -> Option<cpal::Device> {
 
 pub fn guess_channel(device: &str, channels: usize) -> usize {
     let lower = device.to_lowercase();
-    if lower.contains("scarlett") && lower.contains("solo") && channels >= 2 {
+    let solo = lower.contains("scarlett") && lower.contains("solo");
+    if solo && !lower.contains("4th gen") && channels >= 2 {
         1
     } else {
         0
     }
+}
+
+pub fn guitar_input(device: &str) -> bool {
+    device.to_lowercase().contains("inst")
 }
 
 fn pick(
@@ -128,12 +199,21 @@ fn pick(
     let best = configs
         .iter()
         .filter(fits)
-        .max_by_key(|c| (c.sample_format() == cpal::SampleFormat::F32, c.channels()))
+        .max_by_key(|c| {
+            (
+                channel_rank(device, input, c.channels()),
+                c.sample_format() == cpal::SampleFormat::F32,
+            )
+        })
         .ok_or(format!("{} does not support {rate} Hz", name(device)))?;
     Ok((best.sample_format(), best.channels() as usize))
 }
 
 pub fn start(settings: &Settings, build: impl FnOnce(f32) -> Chain) -> Result<Audio, String> {
+    #[cfg(target_os = "linux")]
+    if settings.backend == Backend::Jack {
+        return crate::jack_audio::start(settings, build);
+    }
     let rate = settings.rate;
     let in_dev = find(settings.input.as_deref(), true).ok_or("no input device")?;
     let out_dev = find(settings.output.as_deref(), false).ok_or("no output device")?;
@@ -181,13 +261,14 @@ pub fn start(settings: &Settings, build: impl FnOnce(f32) -> Chain) -> Result<Au
     Ok(Audio {
         remote,
         rate,
+        buffer: settings.buffer,
         input: name(&in_dev),
         output: name(&out_dev),
         channel,
         latency_ms,
         dropouts,
-        _input: input,
-        _output: output,
+        realtime: Arc::new(AtomicU8::new(0)),
+        _streams: Box::new((input, output)),
     })
 }
 
@@ -304,11 +385,56 @@ mod tests {
     mod when_guessing_the_guitar_input {
         use super::*;
 
+        mod with_a_3rd_gen_scarlett_solo {
+            use super::*;
+
+            #[test]
+            fn uses_input_2() {
+                assert_eq!(guess_channel("Scarlett Solo USB", 2), 1);
+                assert_eq!(
+                    guess_channel("Scarlett Solo USB, USB Audio (hw:CARD=USB,DEV=0)", 2),
+                    1
+                );
+            }
+        }
+
+        mod with_a_4th_gen_scarlett_solo {
+            use super::*;
+
+            #[test]
+            fn uses_input_1() {
+                assert_eq!(guess_channel("Scarlett Solo 4th Gen Pro", 4), 0);
+                assert_eq!(
+                    guess_channel("Scarlett Solo 4th Gen, USB Audio (hw:CARD=Gen,DEV=0)", 4),
+                    0
+                );
+                assert_eq!(
+                    guess_channel("Scarlett Solo 4th Gen Input 1 Inst/Line", 1),
+                    0
+                );
+            }
+        }
+
+        mod with_another_device {
+            use super::*;
+
+            #[test]
+            fn uses_input_1() {
+                assert_eq!(guess_channel("Scarlett 2i2 USB", 2), 0);
+                assert_eq!(guess_channel("MacBook Pro Microphone", 1), 0);
+                assert_eq!(guess_channel("Built-in Audio Analog Stereo", 2), 0);
+            }
+        }
+    }
+
+    mod when_choosing_the_default_input {
+        use super::*;
+
         #[test]
-        fn uses_the_instrument_jack_of_a_scarlett_solo() {
-            assert_eq!(guess_channel("Scarlett Solo USB", 2), 1);
-            assert_eq!(guess_channel("Scarlett 2i2 USB", 2), 0);
-            assert_eq!(guess_channel("MacBook Pro Microphone", 1), 0);
+        fn prefers_the_instrument_source() {
+            assert!(guitar_input("Scarlett Solo 4th Gen Input 1 Inst/Line"));
+            assert!(!guitar_input("Scarlett Solo 4th Gen Input 2 Mic"));
+            assert!(!guitar_input("Built-in Audio Analog Stereo"));
         }
     }
 }

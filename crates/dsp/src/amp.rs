@@ -288,9 +288,9 @@ struct StageState {
     shift: f32,
 }
 
-const SHIFT_DEPTH: f32 = 0.15;
-const SHIFT_ATTACK_MS: f32 = 3.0;
-const SHIFT_RELEASE_MS: f32 = 40.0;
+const SHIFT_DEPTH: f32 = 0.05;
+const SHIFT_ATTACK_MS: f32 = 10.0;
+const SHIFT_RELEASE_MS: f32 = 150.0;
 
 pub struct Amp {
     voicing: &'static Voicing,

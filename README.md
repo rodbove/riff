@@ -42,26 +42,70 @@ Read the tutorial at https://rodbove.github.io/riff/tutorial.html.
 
 ## Build and run
 
+### macOS
+
 1. Install Rust.
 2. Run `./scripts/install.sh`. The script builds riff and copies `riff.app` to Applications.
 3. Open riff from Applications.
 4. Allow microphone access when macOS asks. riff needs this access to read the audio interface.
 
+### Linux
+
+riff uses PipeWire through its JACK layer. You do not need a JACK server. The steps are for Arch Linux. Other distributions have packages with similar names.
+
+1. Install the build tools and the audio packages:
+
+   ```sh
+   sudo pacman -S --needed base-devel rustup pipewire pipewire-jack wireplumber rtkit realtime-privileges
+   rustup default stable
+   ```
+
+2. Add your user to the `realtime` group:
+
+   ```sh
+   sudo usermod -aG realtime "$USER"
+   ```
+
+3. Log out and log in again. This step is necessary. If you do not log out, riff cannot get realtime priority and the sound crackles.
+4. Run `./scripts/install.sh`. The script builds riff, copies it to `~/.local/bin` and adds riff to the app menu. To also install the VST3 and CLAP plugins, run `./scripts/install.sh --plugins`.
+5. Open riff from the app menu.
+
+In SETUP, BACKEND is PIPEWIRE / JACK. The ALSA backend is a fallback. Use it only if PipeWire does not run.
+
 For development, run `cargo run --release -p riff-app`.
 
 ## Set up a Focusrite Scarlett Solo
 
-1. Connect the guitar to the INST input (input 2) on the front of the Scarlett.
+1. Connect the guitar to the instrument input on the front of the Scarlett. On a 3rd gen Solo, this is input 2. On a 4th gen Solo, this is input 1.
 2. Push the INST button, so that the input is in instrument mode.
 3. Play hard and turn the GAIN knob on the Scarlett until the ring flashes green, not red.
 4. In riff, click SETUP:
    - Set INPUT to the Scarlett.
-   - Set GUITAR ON to input 2. riff selects input 2 for a Scarlett Solo automatically.
+   - Set GUITAR ON to the instrument input. riff selects it for a Scarlett Solo automatically.
    - Set OUTPUT to the Scarlett, and connect headphones or monitors to the Scarlett.
    - Set RATE to 48000 Hz and BUFFER to 128 samples.
 5. Click APPLY. The status line shows the latency and the dropouts.
 6. If you hear crackles, set BUFFER to 256 samples.
 7. Turn off DIRECT MONITOR on the Scarlett. If you do not, you hear the clean guitar too.
+
+### Scarlett Solo on Linux
+
+The Linux kernel supports the Scarlett Solo (3rd and 4th gen) directly. You do not need a driver.
+
+1. Optional: install `alsa-scarlett-gui` from the AUR. It controls INST, AIR, direct monitor and the other settings of the Scarlett. If it shows that MSD mode is on, turn MSD mode off and connect the Scarlett again.
+2. Keep the default profile of the Scarlett. In this profile, each input is a separate device.
+3. In riff, click SETUP:
+   - Set INPUT to the instrument input of the Scarlett, for example "Scarlett Solo 4th Gen Input 1 Inst/Line". If you do not set INPUT, riff selects this input.
+   - Set OUTPUT to the Scarlett or to other speakers.
+   - RATE is set by PipeWire, usually 48000 Hz.
+   - Set BUFFER to 128 samples. riff asks PipeWire for this buffer size. When riff closes, PipeWire uses its usual buffer size again.
+4. Click APPLY. The status line shows "realtime" when the audio thread has realtime priority.
+
+If you hear crackles:
+
+- Look at the status line. If it shows NOT REALTIME, do steps 1 to 3 of the Linux installation again, then log out and log in.
+- Set BUFFER to 256 samples.
+- Run `pw-top` in a terminal. The ERR column shows the dropouts of each program.
 
 ## Use
 
@@ -75,7 +119,7 @@ For development, run `cargo run --release -p riff-app`.
 - TUNE is off in presets for songs in a lower tuning. Turn it on to play these songs with a guitar in E standard. Pitch shifting changes the tone a little. For the best sound, tune the guitar down.
 - HARMONY plays a second guitar line at a fixed interval. Set INTERVAL to fit the key of the solo.
 - Push T, or click TUNER, to tune. The tuner mutes the output.
-- Click SAVE to save the tone as a user preset. User presets go to `~/Music/riff/presets`.
+- Click SAVE to save the tone as a user preset. User presets go to `~/Music/riff/presets`. On Linux, riff uses the music folder of your desktop, for example `~/Música/riff/presets`.
 - Click A/B one time to store the current tone as A. Change the tone, then click A/B to switch between the two tones.
 
 ## NAM captures and impulse responses

@@ -110,6 +110,13 @@ impl NamAmp {
     }
 }
 
+impl NamAmp {
+    fn finish(&mut self, y: f32) -> f32 {
+        let y = self.treble.process(self.mid.process(self.bass.process(y)));
+        y * self.trim * self.output.tick()
+    }
+}
+
 impl Mono for NamAmp {
     fn set(&mut self, param: usize, value: f32) {
         let k = (value - 5.0) / 5.0;
@@ -126,8 +133,17 @@ impl Mono for NamAmp {
 
     fn process(&mut self, x: f32) -> f32 {
         let y = self.model.process_sample(x * self.input.tick());
-        let y = self.treble.process(self.mid.process(self.bass.process(y)));
-        y * self.trim * self.output.tick()
+        self.finish(y)
+    }
+
+    fn process_block(&mut self, io: &mut [f32]) {
+        for s in io.iter_mut() {
+            *s *= self.input.tick();
+        }
+        self.model.process_buffer(io);
+        for s in io.iter_mut() {
+            *s = self.finish(*s);
+        }
     }
 }
 

@@ -1,4 +1,5 @@
 use std::collections::VecDeque;
+use std::sync::mpsc::{Receiver, Sender, channel};
 
 use riff_dsp::fx::Kind;
 use riff_dsp::tuner::{self, Reading};
@@ -8,6 +9,7 @@ use crate::audio::{self, Audio};
 use crate::midi::{self, Midi};
 use crate::presets::{self, Bank};
 use crate::settings::{self, Settings};
+use crate::take::{self, Take};
 
 const TUNER_WINDOW: usize = 4096;
 const TUNER_EVERY: f64 = 0.08;
@@ -21,6 +23,7 @@ pub struct App {
     pub audio: Option<Audio>,
     pub error: Option<String>,
     pub setup: bool,
+    pub devices: Option<(Vec<audio::Device>, Vec<String>)>,
     pub bank: Bank,
     pub preset: Option<usize>,
     pub compare: Option<Rig>,
@@ -32,6 +35,8 @@ pub struct App {
     pub meter_in: f32,
     pub meter_out: f32,
     pub gate_open: bool,
+    pub take: Option<Take>,
+    jobs: (Sender<String>, Receiver<String>),
     tap: VecDeque<f32>,
     last_tuned: f64,
 }
@@ -48,6 +53,7 @@ impl App {
             audio: None,
             error: None,
             setup: false,
+            devices: None,
             bank: Bank::load(),
             preset: None,
             compare: None,
@@ -59,6 +65,8 @@ impl App {
             meter_in: 0.0,
             meter_out: 0.0,
             gate_open: false,
+            take: None,
+            jobs: channel(),
             tap: VecDeque::with_capacity(TUNER_WINDOW * 2),
             last_tuned: 0.0,
         };
@@ -159,7 +167,49 @@ impl App {
         }
     }
 
+    pub fn toggle_record(&mut self) {
+        match self.take.take() {
+            Some(mut t) => {
+                self.send(Command::Record(false));
+                if let Some(a) = self.audio.as_mut() {
+                    drain(a, &mut t);
+                }
+                t.save(self.jobs.0.clone());
+                self.say("saving the take");
+            }
+            None => {
+                let Some(a) = self.audio.as_mut() else {
+                    self.say("no audio device. Open SETUP.");
+                    return;
+                };
+                while a.remote.dry.pop().is_ok() {}
+                while a.remote.wet.pop().is_ok() {}
+                a.remote.meters.take_lost();
+                self.take = Some(Take::new(&self.rig.name, a.rate));
+                self.send(Command::Record(true));
+            }
+        }
+    }
+
+    pub fn reamp(&mut self) {
+        let dir = take::folder();
+        let _ = std::fs::create_dir_all(&dir);
+        let Some(path) = rfd::FileDialog::new()
+            .set_title("Reamp a take through the current tone")
+            .set_directory(&dir)
+            .add_filter("wav", &["wav"])
+            .pick_file()
+        else {
+            return;
+        };
+        take::reamp(path, self.rig.clone(), self.jobs.0.clone());
+        self.say("reamping");
+    }
+
     pub fn restart(&mut self) {
+        if self.take.is_some() {
+            self.toggle_record();
+        }
         self.audio = None;
         let (rig, library) = (&self.rig, &mut self.library);
         let mut warnings = Vec::new();
@@ -223,10 +273,20 @@ impl App {
             self.toast = None;
         }
         self.midi();
+        while let Ok(message) = self.jobs.1.try_recv() {
+            self.toast = Some((message, now + 6.0));
+        }
         let Some(a) = self.audio.as_mut() else {
             return;
         };
         a.remote.collect();
+        match self.take.as_mut() {
+            Some(t) => drain(a, t),
+            None => {
+                while a.remote.dry.pop().is_ok() {}
+                while a.remote.wet.pop().is_ok() {}
+            }
+        }
         let (i, o, gate) = a.remote.meters.read();
         self.meter_in = i.max(self.meter_in * METER_FALL);
         self.meter_out = o.max(self.meter_out * METER_FALL);
@@ -259,6 +319,16 @@ impl App {
             let _ = std::fs::write(dir.join("current.json"), text);
         }
     }
+}
+
+fn drain(a: &mut Audio, t: &mut Take) {
+    while let Ok(v) = a.remote.dry.pop() {
+        t.dry.push(v);
+    }
+    while let Ok(f) = a.remote.wet.pop() {
+        t.wet.extend(f);
+    }
+    t.lost += a.remote.meters.take_lost();
 }
 
 fn load_current() -> Option<Rig> {

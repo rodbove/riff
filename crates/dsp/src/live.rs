@@ -8,6 +8,7 @@ use crate::chain::{Chain, Target};
 const COMMANDS: usize = 1024;
 const TRASH: usize = 16;
 const TAP_SECONDS: usize = 1;
+const RECORD_SECONDS: usize = 10;
 
 pub enum Command {
     Swap(Box<Chain>),
@@ -21,6 +22,7 @@ pub enum Command {
         on: bool,
     },
     Mute(bool),
+    Record(bool),
 }
 
 #[derive(Default)]
@@ -28,9 +30,14 @@ pub struct Meters {
     input: AtomicU32,
     output: AtomicU32,
     gate: AtomicBool,
+    lost: AtomicU32,
 }
 
 impl Meters {
+    pub fn take_lost(&self) -> u32 {
+        self.lost.swap(0, Ordering::Relaxed)
+    }
+
     pub fn read(&self) -> (f32, f32, bool) {
         let o = Ordering::Relaxed;
         (
@@ -49,6 +56,10 @@ pub struct Runner {
     tap: Producer<f32>,
     meters: Arc<Meters>,
     mute: bool,
+    scratch: Vec<f32>,
+    recording: bool,
+    dry: Producer<f32>,
+    wet: Producer<[f32; 2]>,
 }
 
 pub struct Remote {
@@ -56,6 +67,8 @@ pub struct Remote {
     pub trash: Consumer<Box<Chain>>,
     pub tap: Consumer<f32>,
     pub meters: Arc<Meters>,
+    pub dry: Consumer<f32>,
+    pub wet: Consumer<[f32; 2]>,
 }
 
 impl Remote {
@@ -74,6 +87,8 @@ pub fn live(chain: Chain) -> (Runner, Remote) {
     let (tp, tc) = RingBuffer::new(TRASH);
     let (ap, ac) = RingBuffer::new(rate * TAP_SECONDS);
     let meters = Arc::new(Meters::default());
+    let (dp, dc) = RingBuffer::new(rate * RECORD_SECONDS);
+    let (wp, wc) = RingBuffer::new(rate * RECORD_SECONDS);
     (
         Runner {
             chain: Box::new(chain),
@@ -83,12 +98,18 @@ pub fn live(chain: Chain) -> (Runner, Remote) {
             tap: ap,
             meters: meters.clone(),
             mute: false,
+            scratch: vec![0.0; crate::chain::BLOCK],
+            recording: false,
+            dry: dp,
+            wet: wp,
         },
         Remote {
             commands: cp,
             trash: tc,
             tap: ac,
             meters,
+            dry: dc,
+            wet: wc,
         },
     )
 }
@@ -109,6 +130,7 @@ impl Runner {
     }
 
     pub fn process(&mut self, input: &[f32], out: &mut [[f32; 2]]) {
+        let _ftz = crate::denormal::NoDenormals::new();
         if let Some(old) = self.spare.take() {
             self.discard(old);
         }
@@ -125,17 +147,40 @@ impl Runner {
                 } => self.chain.set(target, param, value),
                 Command::Enable { target, on } => self.chain.enable(target, on),
                 Command::Mute(m) => self.mute = m,
+                Command::Record(on) => self.recording = on,
             }
         }
         let mut peak_in = 0.0f32;
         let mut peak_out = 0.0f32;
-        for (x, o) in input.iter().zip(out.iter_mut()) {
-            let x = x * self.chain.input_gain();
-            peak_in = peak_in.max(x.abs());
-            let _ = self.tap.push(x);
-            let y = self.chain.process(x);
-            *o = if self.mute { [0.0; 2] } else { y };
-            peak_out = peak_out.max(o[0].abs()).max(o[1].abs());
+        for (input, out) in input
+            .chunks(crate::chain::BLOCK)
+            .zip(out.chunks_mut(crate::chain::BLOCK))
+        {
+            let n = input.len();
+            for (s, x) in self.scratch[..n].iter_mut().zip(input) {
+                let x = x * self.chain.input_gain();
+                peak_in = peak_in.max(x.abs());
+                let _ = self.tap.push(x);
+                *s = x;
+            }
+            self.chain.process_block(&self.scratch[..n], &mut out[..n]);
+            if self.recording {
+                let mut lost = 0;
+                for (x, y) in input.iter().zip(out.iter()) {
+                    if self.dry.push(*x).is_err() | self.wet.push(*y).is_err() {
+                        lost += 1;
+                    }
+                }
+                if lost > 0 {
+                    self.meters.lost.fetch_add(lost, Ordering::Relaxed);
+                }
+            }
+            for o in out.iter_mut() {
+                if self.mute {
+                    *o = [0.0; 2];
+                }
+                peak_out = peak_out.max(o[0].abs()).max(o[1].abs());
+            }
         }
         let o = Ordering::Relaxed;
         self.meters.input.fetch_max(peak_in.to_bits(), o);
@@ -222,6 +267,39 @@ mod tests {
             runner.process(&input, &mut out);
             assert!(out.iter().all(|f| *f == [0.0, 0.0]));
             assert_eq!(remote.tap.slots(), 64);
+        }
+    }
+
+    mod when_recording {
+        use super::*;
+
+        #[test]
+        fn captures_the_raw_input_and_the_output_without_allocating() {
+            let (mut runner, mut remote) =
+                live(Chain::build(&rig(), RATE, &mut Library::default()));
+            let input: Vec<f32> = (0..300).map(|i| (i as f32 * 0.05).sin() * 0.3).collect();
+            let mut out = vec![[0.0f32; 2]; 300];
+            remote.send(Command::Record(true));
+            assert_no_alloc(|| runner.process(&input, &mut out));
+            let dry: Vec<f32> = std::iter::from_fn(|| remote.dry.pop().ok()).collect();
+            let wet: Vec<[f32; 2]> = std::iter::from_fn(|| remote.wet.pop().ok()).collect();
+            assert_eq!(dry, input);
+            assert_eq!(wet, out);
+            assert_eq!(remote.meters.take_lost(), 0);
+        }
+    }
+
+    mod when_not_recording {
+        use super::*;
+
+        #[test]
+        fn captures_nothing() {
+            let (mut runner, mut remote) =
+                live(Chain::build(&rig(), RATE, &mut Library::default()));
+            let input = vec![0.1f32; 64];
+            let mut out = vec![[0.0f32; 2]; 64];
+            runner.process(&input, &mut out);
+            assert!(remote.dry.pop().is_err() && remote.wet.pop().is_err());
         }
     }
 }

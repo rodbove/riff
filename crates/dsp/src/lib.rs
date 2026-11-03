@@ -4,6 +4,7 @@ pub mod cab;
 pub mod chain;
 pub mod clip;
 pub mod conv;
+pub mod denormal;
 pub mod fx;
 pub mod gate;
 pub mod library;
@@ -15,6 +16,7 @@ pub mod preset;
 pub mod rig;
 pub mod tuner;
 pub mod util;
+pub mod wav;
 
 pub use chain::{Chain, Target};
 pub use library::Library;
