@@ -1,0 +1,511 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>riff tutorial</title>
+<meta name="description" content="riff: a guitar amp, cabinet and pedal simulator for metal. Standalone app and VST3/CLAP plugin.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+  <div class="top">
+    <h1 class="logo">riff</h1>
+    <span>metal amp sim</span>
+    <nav><a href="index.html">home</a> <a href="tutorial.html" class="on">tutorial</a> <a href="https://github.com/rodbove/riff">github</a></nav>
+  </div>
+  <p class="lead">This tutorial starts with the cable and ends with your own tones. Do the steps in sequence the first time.</p>
+
+  <section>
+    <h2>Contents</h2>
+    <ol class="toc">
+      <li><a href="#need">What you need</a></li>
+      <li><a href="#install">Install riff</a></li>
+      <li><a href="#interface">Connect the audio interface</a></li>
+      <li><a href="#setup">Set up the audio in riff</a></li>
+      <li><a href="#tour">The screen</a></li>
+      <li><a href="#presets">Play a preset</a></li>
+      <li><a href="#chain">The signal chain</a></li>
+      <li><a href="#tone">Make a metal tone</a></li>
+      <li><a href="#recipes">Tone recipes</a></li>
+      <li><a href="#amps">Amps</a></li>
+      <li><a href="#cabs">Cabinets and IRs</a></li>
+      <li><a href="#pedals">Pedals</a></li>
+      <li><a href="#effects">Effects</a></li>
+      <li><a href="#tuning">Tuner and drop tunings</a></li>
+      <li><a href="#save">Save and compare tones</a></li>
+      <li><a href="#nam">NAM captures</a></li>
+      <li><a href="#midi">MIDI and expression pedal</a></li>
+      <li><a href="#plugin">Use the plugin in a DAW</a></li>
+      <li><a href="#trouble">Troubleshooting</a></li>
+      <li><a href="#list">All factory presets</a></li>
+    </ol>
+  </section>
+
+  <section id="need">
+    <h2><span class="n">1</span>What you need</h2>
+    <ul>
+      <li>A Mac. riff is tested on macOS.</li>
+      <li>An audio interface with an instrument input. This tutorial uses a Focusrite Scarlett Solo. Other interfaces work the same way.</li>
+      <li>A guitar and a cable.</li>
+      <li>Headphones or studio monitors, connected to the interface.</li>
+    </ul>
+    <p class="tip warn">Do not connect the guitar to the microphone input of the computer. The level is wrong and the latency is high.</p>
+  </section>
+
+  <section id="install">
+    <h2><span class="n">2</span>Install riff</h2>
+    <ol>
+      <li>Install Rust: <code>curl https://sh.rustup.rs -sSf | sh</code>.</li>
+      <li>Get the source and install the app:
+<pre><code>git clone https://github.com/rodbove/riff
+cd riff
+./scripts/install.sh</code></pre></li>
+      <li>Open riff from Applications or Launchpad.</li>
+      <li>When macOS asks for microphone access, click <b>Allow</b>. riff needs this access to read the audio interface.</li>
+    </ol>
+    <p class="tip">If you clicked <b>Don't Allow</b>, open System Settings, then Privacy &amp; Security, then Microphone, and turn on riff.</p>
+  </section>
+
+  <section id="interface">
+    <h2><span class="n">3</span>Connect the audio interface</h2>
+    <p>These steps are for the Scarlett Solo.</p>
+    <ol>
+      <li>Connect the Scarlett to the Mac with the USB cable.</li>
+      <li>Connect the guitar to the <b>INST</b> input. This is input 2, on the front at the right. Input 1 is the microphone input.</li>
+      <li>Push the <b>INST</b> button so that it is on.</li>
+      <li>Turn the guitar volume to full.</li>
+      <li>Play hard chords. Turn the <b>GAIN</b> knob of input 2 until the ring around it is green on the loudest notes. It must not go red.</li>
+      <li>Turn <b>DIRECT MONITOR</b> off. If it is on, you also hear the dry guitar.</li>
+      <li>Connect headphones to the headphone output, or monitors to the rear outputs.</li>
+    </ol>
+    <p class="tip">Good gain staging is the most important step for a good tone. Too little gain makes the amps feel weak. Too much gain causes digital clipping, which sounds harsh.</p>
+  </section>
+
+  <section id="setup">
+    <h2><span class="n">4</span>Set up the audio in riff</h2>
+    <ol>
+      <li>Click <span class="ui">SETUP</span> at the top right.</li>
+      <li>Set <b>INPUT</b> to the Scarlett.</li>
+      <li>Set <b>GUITAR ON</b> to the input of your guitar. riff selects input 2 automatically for a Scarlett Solo.</li>
+      <li>Set <b>OUTPUT</b> to the Scarlett.</li>
+      <li>Set <b>RATE</b> to 48000 Hz.</li>
+      <li>Set <b>BUFFER</b> to 128 samples.</li>
+      <li>Click <span class="ui">APPLY</span>.</li>
+      <li>Play. The <b>IN</b> meter at the top moves. The status line shows the latency and the number of dropouts.</li>
+    </ol>
+    <table>
+      <tr><th>Buffer</th><th>Feel</th><th>Use it when</th></tr>
+      <tr><td>64</td><td>Lowest latency</td><td>Your Mac is fast and you hear no crackles.</td></tr>
+      <tr><td>128</td><td>Feels like an amp</td><td>Default. Good for most Macs.</td></tr>
+      <tr><td>256</td><td>Small delay</td><td>You hear crackles, or you use a large NAM capture.</td></tr>
+    </table>
+    <p class="tip">Use the <b>INPUT</b> knob at the top right to set the level into riff, and the <b>OUTPUT</b> knob to set the volume. The limiter at the end of the chain prevents clipping at the output.</p>
+  </section>
+
+  <section id="tour">
+    <h2><span class="n">5</span>The screen</h2>
+    <figure>
+      <img class="shot" src="img/symbolic-rhythm.png" alt="The riff screen with the Symbolic Rhythm preset">
+      <figcaption>Symbolic Rhythm on the BRIT 800 amp.</figcaption>
+    </figure>
+    <table>
+      <tr><th>Part</th><th>What it does</th></tr>
+      <tr><td>Header</td><td>Preset name, <span class="ui">&lt;</span> <span class="ui">&gt;</span>, <span class="ui">SAVE</span>, <span class="ui">A/B</span>, <span class="ui">TUNER</span>, the IN and OUT meters, the GATE light, the INPUT and OUTPUT knobs and <span class="ui">SETUP</span>.</td></tr>
+      <tr><td>Note line</td><td>Below the header. It shows the tip of the preset, for example the tuning.</td></tr>
+      <tr><td>Pedalboard</td><td>The pedals before the amp. They play from left to right.</td></tr>
+      <tr><td>Amp</td><td>The amp head with the model buttons, the knobs, BRIGHT and POWER.</td></tr>
+      <tr><td>Cabinet</td><td>The speaker model, the two mics, MIC BLEND, LOW CUT, HIGH CUT, LEVEL and the CAB switch.</td></tr>
+      <tr><td>Effects rack</td><td>The effects after the cabinet: modulation, delay, reverb and more.</td></tr>
+    </table>
+    <h3>Mouse and keys</h3>
+    <table>
+      <tr><td>Drag a knob up or down</td><td>Change the value</td></tr>
+      <tr><td>Shift + drag</td><td>Fine change</td></tr>
+      <tr><td>Mouse wheel on a knob</td><td>Change the value in steps</td></tr>
+      <tr><td>Double-click a knob</td><td>Reset to the default value</td></tr>
+      <tr><td>Click a footswitch</td><td>Turn a pedal on or off. The red light shows that the pedal is on.</td></tr>
+      <tr><td>Drag a pedal</td><td>Change the order of the pedals</td></tr>
+      <tr><td>Click X</td><td>Remove a pedal or an effect</td></tr>
+      <tr><td><kbd>&larr;</kbd> <kbd>&rarr;</kbd></td><td>Previous or next preset</td></tr>
+      <tr><td><kbd>T</kbd></td><td>Tuner on or off</td></tr>
+    </table>
+  </section>
+
+  <section id="presets">
+    <h2><span class="n">6</span>Play a preset</h2>
+    <ol>
+      <li>Click the preset name in the header. The preset browser opens.</li>
+      <li>Select a band, for example METALLICA.</li>
+      <li>Select an album, for example Master of Puppets.</li>
+      <li>Click a song or a part, for example Puppets Rhythm.</li>
+      <li>Read the note line below the header. It tells you the tuning and how to play the tone.</li>
+      <li>Play. Use <kbd>&larr;</kbd> and <kbd>&rarr;</kbd> to try the next presets.</li>
+    </ol>
+    <p class="tip">The presets are a start point in the style of the record, not a copy. Your guitar, pickups and pick attack change the sound. Adjust GAIN and the cabinet first.</p>
+    <h3>Rhythm, lead and clean</h3>
+    <p>Most albums have a rhythm preset for the riffs, a lead or solo preset with more mids, delay and reverb, and a clean preset for intros. Change the preset when the part of the song changes.</p>
+  </section>
+
+  <section id="chain">
+    <h2><span class="n">7</span>The signal chain</h2>
+    <p>The sound goes through riff in this sequence:</p>
+    <div class="chain">
+      <span>guitar</span><i>&rarr;</i><span>INPUT</span><i>&rarr;</i><span>tuner</span><i>&rarr;</i><span>gate</span><i>&rarr;</i><span>pedals (up to 8)</span><i>&rarr;</i><span class="amp">amp</span><i>&rarr;</i><span class="cab">cabinet</span><i>&rarr;</i><span>effects (up to 6)</span><i>&rarr;</i><span>OUTPUT</span><i>&rarr;</i><span>limiter</span>
+    </div>
+    <ul>
+      <li>The gate reads the clean guitar, but it works after the pedals. This keeps the noise low and the palm mutes tight.</li>
+      <li>Pedals before the amp change what the amp gets. A boost here makes the amp tighter and more saturated.</li>
+      <li>Effects after the cabinet change the finished sound. Delay and reverb belong here, so they stay clear.</li>
+    </ul>
+  </section>
+
+  <section id="tone">
+    <h2><span class="n">8</span>Make a metal tone</h2>
+    <p>Start with a clean board, then add one part at a time.</p>
+    <ol>
+      <li>Select the RECTO or BLOCK 51 amp.</li>
+      <li>Set GAIN to 6. Set BASS 5, MID 5, TREBLE 6, PRESENCE 6, MASTER 5.</li>
+      <li>Select the 4x12 V30 cabinet. Set MIC BLEND to about 30%, so that the on-axis mic is the main sound.</li>
+      <li>Click <span class="ui">+ PEDAL</span> and add OD-9. Set DRIVE to 0 to 2, TONE to 6, LEVEL to 8. This is the classic metal boost: it cuts the low end before the amp and makes palm mutes tight.</li>
+      <li>Set the gate THRESH so that the noise stops when you mute the strings, but long notes still ring.</li>
+      <li>Play fast palm mutes. If the sound is muddy, lower BASS on the amp or raise LOW CUT on the cabinet. Do not raise GAIN to fix a weak sound. Raise the OD-9 LEVEL instead.</li>
+      <li>Click <span class="ui">+ EFFECT</span> and add DOUBLE. It makes a wide stereo sound, like two guitars recorded left and right.</li>
+      <li>Click <span class="ui">SAVE</span> and type a name.</li>
+    </ol>
+    <p class="tip">Less gain usually sounds heavier. A lot of famous metal rhythm tones have less gain than you expect.</p>
+  </section>
+
+  <section id="recipes">
+    <h2><span class="n">9</span>Tone recipes</h2>
+    <table>
+      <tr><th>Style</th><th>Chain</th><th>Tips</th></tr>
+      <tr><td>80s thrash</td><td>OD-9 &rarr; BRIT 800 or MARK IIC &rarr; 4x12 Greenback</td><td>Scoop the mids with EQ-10. Keep the gain below 7.</td></tr>
+      <tr><td>Modern tight rhythm</td><td>Gate &rarr; OD-9 (drive 0) &rarr; BLOCK 51 &rarr; 4x12 V30 &rarr; DOUBLE</td><td>Set the gate tight. Raise LOW CUT on the cabinet to about 80 Hz.</td></tr>
+      <tr><td>Big Recto chug</td><td>Gate &rarr; RECTO &rarr; 4x12 V30</td><td>Lower BASS on the amp and raise RESONANCE for a deep low end that stays tight.</td></tr>
+      <tr><td>Swedish death</td><td>SWEDISH (all knobs high) &rarr; BRIT 800 (low gain)</td><td>The pedal does the distortion. The amp only adds the speaker character.</td></tr>
+      <tr><td>Lead</td><td>OD-9 &rarr; MARK IIC or UBER &rarr; DELAY &rarr; VERB</td><td>More mids, delay at about 400 ms with a 25% mix, a plate reverb.</td></tr>
+      <tr><td>Twin harmony lead</td><td>Lead tone &rarr; HARMONY</td><td>Set INTERVAL to +M3 or +m3 to fit the key of the solo.</td></tr>
+      <tr><td>Clean</td><td>COMP &rarr; CLEAN TWIN &rarr; CHORUS &rarr; DELAY &rarr; VERB</td><td>Turn the guitar volume down a little for a cleaner sound.</td></tr>
+      <tr><td>Acoustic intro</td><td>ACOUSTIC &rarr; CLEAN TWIN &rarr; VERB</td><td>Use the neck pickup. Turn the cabinet off for a direct sound.</td></tr>
+    </table>
+  </section>
+
+  <section id="amps">
+    <h2><span class="n">10</span>Amps</h2>
+    <figure>
+      <img class="shot" src="img/black-album-rhythm.png" alt="The RECTO amp with the Black Album Rhythm preset">
+      <figcaption>Black Album Rhythm on the RECTO amp.</figcaption>
+    </figure>
+    <table>
+      <tr><th>Model</th><th>Like</th><th>Good for</th></tr>
+      <tr><td>CLEAN TWIN</td><td>Fender Twin, clean</td><td>Clean intros, ballads, arpeggios</td></tr>
+      <tr><td>BRIT 800</td><td>Marshall JCM800</td><td>Early Metallica, Death, classic thrash with a boost</td></tr>
+      <tr><td>MARK IIC</td><td>Mesa Mark IIC+</td><td>Master of Puppets, Justice, Petrucci</td></tr>
+      <tr><td>RECTO</td><td>Mesa Dual Rectifier</td><td>Black Album, A7X rhythm, metalcore</td></tr>
+      <tr><td>BLOCK 51</td><td>Peavey 5150</td><td>Arch Enemy, modern metal, breakdowns</td></tr>
+      <tr><td>UBER</td><td>Bogner Uberschall or Engl</td><td>Death Magnetic, Synyster Gates leads</td></tr>
+    </table>
+    <h3>Knobs</h3>
+    <table>
+      <tr><td>GAIN</td><td>The preamp drive. More gain gives more distortion and sustain, and more noise.</td></tr>
+      <tr><td>BASS, MID, TREBLE</td><td>The tone stack. The knobs affect each other, as on a real amp.</td></tr>
+      <tr><td>PRESENCE</td><td>The high end of the power amp. Raise it to cut through a mix.</td></tr>
+      <tr><td>RESONANCE</td><td>The deep low end of the power amp. Raise it for a big palm mute.</td></tr>
+      <tr><td>MASTER</td><td>The power amp level. High values give more power amp compression and sag.</td></tr>
+      <tr><td>BRIGHT</td><td>A switch that adds high end before the gain stages.</td></tr>
+      <tr><td>POWER</td><td>Turns the amp off for a direct sound, for example with the ACOUSTIC pedal.</td></tr>
+    </table>
+  </section>
+
+  <section id="cabs">
+    <h2><span class="n">11</span>Cabinets and IRs</h2>
+    <table>
+      <tr><th>Model</th><th>Sound</th></tr>
+      <tr><td>4X12 V30</td><td>Tight and aggressive with strong upper mids. The modern metal cabinet.</td></tr>
+      <tr><td>4X12 GREEN</td><td>Greenback speakers. Warm and vintage, with softer highs. Good for 80s tones.</td></tr>
+      <tr><td>2X12 OPEN</td><td>Open back. Airy and less low end. Good for cleans.</td></tr>
+      <tr><td>1X12</td><td>Small and focused. Good for clean and acoustic sounds.</td></tr>
+    </table>
+    <ul>
+      <li><b>MIC A ON AXIS</b> points at the center of the speaker. It is bright and direct.</li>
+      <li><b>MIC B OFF AXIS</b> points at the edge. It is darker and smoother.</li>
+      <li><b>MIC BLEND</b> mixes the two mics. Start at about 30%.</li>
+      <li><b>LOW CUT</b> removes the low end that makes a mix muddy. <b>HIGH CUT</b> removes fizz.</li>
+      <li>The <b>CAB</b> switch turns the cabinet off. Use it with a NAM capture that includes a cabinet.</li>
+    </ul>
+    <h3>Load your own IR</h3>
+    <ol>
+      <li>Put WAV impulse response files in <code>~/Music/riff/ir</code>.</li>
+      <li>Click <span class="ui">MIC A ON AXIS</span> or <span class="ui">MIC B OFF AXIS</span> and select a file. The button then shows the file name.</li>
+      <li>To go back to the built-in mic, right-click the button.</li>
+    </ol>
+  </section>
+
+  <section id="pedals">
+    <h2><span class="n">12</span>Pedals</h2>
+    <p>Click <span class="ui">+ PEDAL</span> to add a pedal. The board holds up to 8 pedals after the gate.</p>
+    <table>
+      <tr><th>Pedal</th><th>Knobs</th><th>Use</th></tr>
+      <tr><td>GATE</td><td>THRESH, RELEASE</td><td>Stops the noise between notes. Always first.</td></tr>
+      <tr><td>BOOST</td><td>LEVEL, TIGHT</td><td>Clean boost. TIGHT cuts the low end before the amp.</td></tr>
+      <tr><td>COMP</td><td>THRESH, RATIO, ATTACK, RELEASE, MAKEUP, BLEND</td><td>Compressor for clean tones and even sustain.</td></tr>
+      <tr><td>OD-9</td><td>DRIVE, TONE, LEVEL</td><td>Tube screamer style. With low DRIVE and high LEVEL it is the classic metal boost.</td></tr>
+      <tr><td>RODENT</td><td>GAIN, FILTER, LEVEL</td><td>RAT style distortion.</td></tr>
+      <tr><td>SWEDISH</td><td>LEVEL, LOW, HIGH, DIST</td><td>HM-2 style chainsaw distortion for Swedish death metal.</td></tr>
+      <tr><td>WAH</td><td>PEDAL, MODE, SENS, Q</td><td>MANUAL mode follows PEDAL or an expression pedal. AUTO mode follows your picking.</td></tr>
+      <tr><td>EQ-10</td><td>31 Hz to 16 kHz, LEVEL</td><td>10-band graphic EQ. Before the amp it shapes the drive. Use the V curve for scooped thrash.</td></tr>
+      <tr><td>OCTAVE</td><td>OCT, DRY</td><td>Adds a note one octave down.</td></tr>
+      <tr><td>TUNE</td><td>SHIFT, MIX</td><td>Shifts the pitch by up to 12 semitones. Use it to play drop tunings in E standard.</td></tr>
+      <tr><td>ACOUSTIC</td><td>BODY, TOP, LEVEL</td><td>Makes an electric guitar sound like an acoustic.</td></tr>
+    </table>
+  </section>
+
+  <section id="effects">
+    <h2><span class="n">13</span>Effects</h2>
+    <p>Click <span class="ui">+ EFFECT</span> to add an effect to the rack. Click the name of an effect to turn it on or off.</p>
+    <table>
+      <tr><th>Effect</th><th>Knobs</th><th>Use</th></tr>
+      <tr><td>CHORUS</td><td>RATE, DEPTH, MIX</td><td>Shimmer for cleans.</td></tr>
+      <tr><td>PHASE</td><td>RATE, DEPTH, FEEDBACK, MIX</td><td>Slow sweep for leads and cleans.</td></tr>
+      <tr><td>FLANGE</td><td>RATE, DEPTH, FEEDBACK, MIX</td><td>Jet sound.</td></tr>
+      <tr><td>DELAY</td><td>TIME, FEEDBACK, MIX, TONE, MODE</td><td>DIGITAL, ANALOG (darker repeats) or PING-PONG (left and right).</td></tr>
+      <tr><td>VERB</td><td>TYPE, DECAY, DAMP, PRE, MIX</td><td>ROOM, PLATE or HALL. Keep the mix low on rhythm tones.</td></tr>
+      <tr><td>DOUBLE</td><td>WIDTH, DELAY</td><td>Stereo doubler. Sounds like two guitar takes, left and right.</td></tr>
+      <tr><td>EQ-10</td><td>bands, LEVEL</td><td>Post EQ to fit the tone into a mix.</td></tr>
+      <tr><td>HARMONY</td><td>INTERVAL, MIX, WIDTH, DELAY</td><td>Adds a second guitar at a fixed interval, for twin leads.</td></tr>
+      <tr><td>TREM</td><td>RATE, DEPTH, SHAPE, STEREO</td><td>Volume pulse. SQUARE gives a stutter effect.</td></tr>
+    </table>
+  </section>
+
+  <section id="tuning">
+    <h2><span class="n">14</span>Tuner and drop tunings</h2>
+    <ol>
+      <li>Push <kbd>T</kbd>, or click <span class="ui">TUNER</span>. The output is muted.</li>
+      <li>Play one open string. The tuner shows the note and the cents.</li>
+      <li>Tune until the display is at 0 cents.</li>
+      <li>Push <kbd>T</kbd> again to play.</li>
+    </ol>
+    <p>Some songs use a lower tuning, for example D standard or drop C. The note line of the preset tells you the tuning. The preset has a TUNE pedal that is off.</p>
+    <ul>
+      <li>For the best sound, tune your guitar down and leave TUNE off.</li>
+      <li>To play in E standard, turn TUNE on. It shifts the pitch by the value of SHIFT. The tone changes a little.</li>
+    </ul>
+  </section>
+
+  <section id="save">
+    <h2><span class="n">15</span>Save and compare tones</h2>
+    <ol>
+      <li>Click <span class="ui">SAVE</span>. Type a name and confirm.</li>
+      <li>Your preset goes to <code>~/Music/riff/presets</code>, and it shows in the browser with your presets.</li>
+    </ol>
+    <h3>A/B compare</h3>
+    <ol>
+      <li>Click <span class="ui">A/B</span> one time. riff stores the current tone as A.</li>
+      <li>Change the tone.</li>
+      <li>Click <span class="ui">A/B</span> to switch between A and the new tone.</li>
+    </ol>
+  </section>
+
+  <section id="nam">
+    <h2><span class="n">16</span>NAM captures</h2>
+    <p>A NAM capture is a neural model of a real amp. riff includes no captures. You can download free captures from <a href="https://tonehunt.org">ToneHunt</a>. Search for 5150, Rectifier, Mark IIC+ or JCM800.</p>
+    <ol>
+      <li>Put the <code>.nam</code> files in <code>~/Music/riff/nam</code>.</li>
+      <li>Click <span class="ui">NAM</span> on the amp and select a file.</li>
+      <li>Use INPUT to set the drive into the capture, and OUTPUT to set the level.</li>
+      <li>If the capture includes a cabinet, turn the CAB switch off.</li>
+      <li>Most captures are made at 48 kHz. Set RATE to 48000 Hz in SETUP. riff shows a warning if the rates are different.</li>
+    </ol>
+    <p class="tip">Right-click <span class="ui">NAM</span> to select a different file. Click an amp model to go back to the built-in amps.</p>
+  </section>
+
+  <section id="midi">
+    <h2><span class="n">17</span>MIDI and expression pedal</h2>
+    <p>riff connects to the first MIDI input that it finds, for example a USB foot controller.</p>
+    <table>
+      <tr><td>Program change</td><td>Selects a preset. Program 0 is the first preset in the list.</td></tr>
+      <tr><td>CC 11</td><td>Moves the PEDAL knob of the WAH. Set the WAH to MANUAL mode and connect an expression pedal.</td></tr>
+    </table>
+  </section>
+
+  <section id="plugin">
+    <h2><span class="n">18</span>Use the plugin in a DAW</h2>
+    <ol>
+      <li>Build the plugin: <code>cargo xtask bundle riff-plugin --release</code>.</li>
+      <li>Copy the bundles:
+<pre><code>cp -r target/bundled/riff.vst3 ~/Library/Audio/Plug-Ins/VST3/
+cp -r target/bundled/riff.clap ~/Library/Audio/Plug-Ins/CLAP/</code></pre></li>
+      <li>Open your DAW and rescan the plugins.</li>
+      <li>Make a mono audio track with the guitar input. Turn on input monitoring.</li>
+      <li>Add riff as an effect on the track.</li>
+    </ol>
+    <p>The plugin has the same screen as the app. The DAW can automate these parameters: Input, Output, Gate, Amp Gain, Wah, Delay Mix and Reverb Mix.</p>
+    <h3>Record a DI track</h3>
+    <p>Record the dry guitar and put riff on the track. You can then change the tone after you record.</p>
+    <p class="tip warn">The plugin has no AU format, so Logic Pro and GarageBand cannot load it. Use Reaper, Ableton Live, Bitwig, Studio One or another VST3 or CLAP host.</p>
+  </section>
+
+  <section id="trouble">
+    <h2><span class="n">19</span>Troubleshooting</h2>
+    <table>
+      <tr><th>Problem</th><th>Solution</th></tr>
+      <tr><td>No sound</td><td>Open SETUP. Check INPUT, GUITAR ON and OUTPUT, then click APPLY. Check that the IN meter moves when you play. Check that the tuner is off.</td></tr>
+      <tr><td>The IN meter does not move</td><td>Set GUITAR ON to the correct input. Give riff microphone access in System Settings.</td></tr>
+      <tr><td>I hear a clean guitar under the tone</td><td>Turn DIRECT MONITOR off on the interface.</td></tr>
+      <tr><td>Crackles or dropouts</td><td>Set BUFFER to 256. Close other audio apps. Remove effects that you do not use.</td></tr>
+      <tr><td>Too much noise or hum</td><td>Raise the gate THRESH. Lower GAIN. Move away from the computer screen with single-coil pickups.</td></tr>
+      <tr><td>The tone is thin or harsh</td><td>Lower the GAIN on the interface if the ring goes red. Lower PRESENCE or HIGH CUT. Try MIC BLEND at 40%.</td></tr>
+      <tr><td>The tone is muddy</td><td>Lower BASS. Raise LOW CUT. Add OD-9 with DRIVE at 0 before the amp.</td></tr>
+      <tr><td>NAM rate warning</td><td>Set RATE to the rate of the capture, usually 48000 Hz.</td></tr>
+    </table>
+  </section>
+
+  <section id="list">
+    <h2><span class="n">20</span>All factory presets</h2>
+    <p>92 presets. The tag after each name is the amp model.</p>
+    <div class="band"><h3>METALLICA</h3>
+<div class="album">Ride the Lightning</div><div class="presets">
+<span>Fight Fire with Fire Intro<small>CLEAN TWIN</small></span>
+<span>Fight Fire with Fire<small>BRIT 800</small></span>
+<span>Ride the Lightning<small>BRIT 800</small></span>
+<span>For Whom the Bell Tolls<small>BRIT 800</small></span>
+<span>Fade to Black Clean<small>CLEAN TWIN</small></span>
+<span>Fade to Black Solo<small>BRIT 800</small></span>
+<span>Creeping Death<small>BRIT 800</small></span>
+<span>The Call of Ktulu<small>BRIT 800</small></span>
+<span>Kirk Lead RTL<small>BRIT 800</small></span>
+</div>
+<div class="album">Master of Puppets</div><div class="presets">
+<span>Puppets Rhythm<small>MARK IIC</small></span>
+<span>Puppets Interlude Clean<small>CLEAN TWIN</small></span>
+<span>Kirk Lead Puppets<small>MARK IIC</small></span>
+</div>
+<div class="album">Metallica (Black Album)</div><div class="presets">
+<span>Black Album Rhythm<small>RECTO</small></span>
+</div>
+<div class="album">Death Magnetic</div><div class="presets">
+<span>That Was Just Your Life<small>UBER</small></span>
+<span>The End of the Line<small>UBER</small></span>
+<span>Broken, Beat &amp; Scarred<small>RECTO</small></span>
+<span>The Day That Never Comes Clean<small>CLEAN TWIN</small></span>
+<span>The Day That Never Comes Heavy<small>UBER</small></span>
+<span>All Nightmare Long<small>UBER</small></span>
+<span>Cyanide<small>RECTO</small></span>
+<span>Suicide &amp; Redemption Lead<small>UBER</small></span>
+<span>Kirk Lead DM<small>UBER</small></span>
+</div>
+<div class="album">...And Justice for All</div><div class="presets">
+<span>Blackened<small>MARK IIC</small></span>
+<span>...And Justice for All<small>MARK IIC</small></span>
+<span>Eye of the Beholder<small>MARK IIC</small></span>
+<span>One Clean<small>CLEAN TWIN</small></span>
+<span>One Heavy<small>MARK IIC</small></span>
+<span>One Solo<small>MARK IIC</small></span>
+<span>The Shortest Straw<small>MARK IIC</small></span>
+<span>Harvester of Sorrow<small>MARK IIC</small></span>
+<span>The Frayed Ends of Sanity<small>MARK IIC</small></span>
+<span>To Live Is to Die Clean<small>CLEAN TWIN</small></span>
+<span>Dyers Eve<small>MARK IIC</small></span>
+<span>Kirk Lead AJFA<small>MARK IIC</small></span>
+</div>
+</div>
+<div class="band"><h3>DREAM THEATER</h3>
+<div class="album">Train of Thought</div><div class="presets">
+<span>As I Am<small>MARK IIC</small></span>
+<span>This Dying Soul<small>MARK IIC</small></span>
+<span>Endless Sacrifice Clean<small>CLEAN TWIN</small></span>
+<span>Endless Sacrifice Heavy<small>MARK IIC</small></span>
+<span>Honor Thy Father<small>MARK IIC</small></span>
+<span>Stream of Consciousness<small>MARK IIC</small></span>
+<span>In the Name of God<small>MARK IIC</small></span>
+<span>Petrucci Lead ToT<small>MARK IIC</small></span>
+</div>
+<div class="album">Signature Tones</div><div class="presets">
+<span>Petrucci Rhythm<small>MARK IIC</small></span>
+<span>Petrucci Lead<small>MARK IIC</small></span>
+<span>Petrucci Clean<small>CLEAN TWIN</small></span>
+</div>
+</div>
+<div class="band"><h3>DEATH</h3>
+<div class="album">Symbolic</div><div class="presets">
+<span>Symbolic Rhythm<small>BRIT 800</small></span>
+<span>Chuck Lead<small>BRIT 800</small></span>
+</div>
+</div>
+<div class="band"><h3>AVENGED SEVENFOLD</h3>
+<div class="album">City of Evil</div><div class="presets">
+<span>Bat Country Rhythm<small>RECTO</small></span>
+<span>Bat Country Solo<small>UBER</small></span>
+<span>Beast and the Harlot<small>RECTO</small></span>
+<span>Seize the Day Clean<small>CLEAN TWIN</small></span>
+<span>Seize the Day Solo<small>UBER</small></span>
+</div>
+<div class="album">Avenged Sevenfold</div><div class="presets">
+<span>Critical Acclaim<small>UBER</small></span>
+<span>Almost Easy<small>UBER</small></span>
+<span>Scream<small>UBER</small></span>
+<span>Afterlife Rhythm<small>RECTO</small></span>
+<span>Afterlife Solo<small>UBER</small></span>
+<span>Gunslinger Acoustic<small>CLEAN TWIN</small></span>
+<span>Dear God Clean<small>CLEAN TWIN</small></span>
+<span>Unbound<small>UBER</small></span>
+<span>A Little Piece of Heaven<small>RECTO</small></span>
+</div>
+<div class="album">Signature Tones</div><div class="presets">
+<span>A7X Rhythm<small>UBER</small></span>
+<span>Synyster Lead<small>UBER</small></span>
+</div>
+</div>
+<div class="band"><h3>ARCH ENEMY</h3>
+<div class="album">Rise of the Tyrant</div><div class="presets">
+<span>Blood on Your Hands<small>BLOCK 51</small></span>
+<span>The Last Enemy<small>BLOCK 51</small></span>
+<span>I Will Live Again<small>BLOCK 51</small></span>
+<span>Night Falls Fast<small>BLOCK 51</small></span>
+<span>Rise of the Tyrant<small>BLOCK 51</small></span>
+<span>Vultures Clean<small>CLEAN TWIN</small></span>
+<span>Vultures Solo<small>BLOCK 51</small></span>
+<span>Amott Twin Lead<small>BLOCK 51</small></span>
+</div>
+<div class="album">Signature Tones</div><div class="presets">
+<span>Amott Rhythm<small>BLOCK 51</small></span>
+<span>Amott Lead<small>BLOCK 51</small></span>
+</div>
+<div class="album">Anthems of Rebellion</div><div class="presets">
+<span>Silent Wars<small>BLOCK 51</small></span>
+<span>We Will Rise<small>BLOCK 51</small></span>
+<span>Dead Bury Their Dead<small>BLOCK 51</small></span>
+<span>End of the Line<small>BLOCK 51</small></span>
+<span>Dehumanization<small>BLOCK 51</small></span>
+<span>Leader of the Rats<small>BLOCK 51</small></span>
+<span>We Will Rise Solo<small>BLOCK 51</small></span>
+<span>Marching on a Dead End Road<small>BLOCK 51</small></span>
+</div>
+</div>
+<div class="band"><h3>METALCORE</h3>
+<div class="album">Killswitch Style</div><div class="presets">
+<span>Verse Riffs<small>RECTO</small></span>
+<span>Big Chorus<small>RECTO</small></span>
+<span>Breakdown Chug<small>BLOCK 51</small></span>
+<span>Clean Arpeggios<small>CLEAN TWIN</small></span>
+<span>Melodic Lead<small>UBER</small></span>
+</div>
+<div class="album">Modern Toolkit</div><div class="presets">
+<span>Modern Rhythm 5150 Style<small>BLOCK 51</small></span>
+<span>Modern Rhythm Recto Style<small>RECTO</small></span>
+<span>Ambient Clean<small>CLEAN TWIN</small></span>
+</div>
+</div>
+<div class="band"><h3>EXTRAS</h3>
+<div class="album">Extras</div><div class="presets">
+<span>Swedish Death<small>BRIT 800</small></span>
+<span>Modern Djent<small>BLOCK 51</small></span>
+<span>Clean Room<small>CLEAN TWIN</small></span>
+</div>
+</div>
+  </section>
+  <footer>riff is open source. The amp, pedal and preset names are generic. Band and album names show the style of a tone only.</footer>
+</main>
+</body>
+</html>

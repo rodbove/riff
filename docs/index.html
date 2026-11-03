@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>riff - metal amp sim</title>
+<meta name="description" content="riff: a guitar amp, cabinet and pedal simulator for metal. Standalone app and VST3/CLAP plugin.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+  <div class="top">
+    <h1 class="logo">riff</h1>
+    <span>metal amp sim</span>
+    <nav><a href="index.html" class="on">home</a> <a href="tutorial.html">tutorial</a> <a href="https://github.com/rodbove/riff">github</a></nav>
+  </div>
+  <p class="lead">Plug in your guitar, pick a song, play. riff runs your guitar through pedals, an amp and a speaker cabinet, in real time, on your Mac.</p>
+  <div class="cta">
+    <a class="btn primary" href="tutorial.html">Read the tutorial</a>
+    <a class="btn" href="https://github.com/rodbove/riff">Get the source</a>
+  </div>
+  <figure>
+    <img class="shot" src="img/bat-country-rhythm.png" alt="riff with the Bat Country Rhythm preset: gate and OD-9 pedals, RECTO amp, 4x12 V30 cabinet and a doubler">
+    <figcaption>Bat Country Rhythm: gate, OD-9 boost, RECTO amp, 4x12 V30 cabinet and a stereo doubler.</figcaption>
+  </figure>
+  <div class="grid">
+    <div class="card"><b>6 amps</b><p>CLEAN TWIN, BRIT 800, MARK IIC, RECTO, BLOCK 51 and UBER. Each amp has 8x oversampling, tube stages that react to your picking, power amp sag and a speaker load.</p></div>
+    <div class="card"><b>4 cabinets, 2 mics</b><p>4x12 V30, 4x12 Greenback, 2x12 open back and 1x12. Blend an on-axis and an off-axis mic, or load your own IR files.</p></div>
+    <div class="card"><b>19 pedals and effects</b><p>Gate, boost, OD-9, RODENT, SWEDISH, wah, EQ, octave, drop tune, acoustic, chorus, phaser, flanger, delay, reverb, doubler, harmony and tremolo.</p></div>
+    <div class="card"><b>92 presets</b><p>Sorted by band, album and song: Metallica, Dream Theater, Death, Avenged Sevenfold, Arch Enemy, metalcore and more.</p></div>
+    <div class="card"><b>NAM captures</b><p>Load a Neural Amp Modeler capture (<code>.nam</code>) into the amp slot, for example a free capture from ToneHunt.</p></div>
+    <div class="card"><b>App and plugin</b><p>Use the standalone app with any audio interface, or load the VST3 or CLAP plugin in Reaper, Ableton Live, Bitwig or Studio One.</p></div>
+  </div>
+  <figure>
+    <img class="shot" src="img/vultures-clean.png" alt="riff with the Vultures Clean preset on the CLEAN TWIN amp">
+    <figcaption>Vultures Clean: CLEAN TWIN amp with chorus, delay and reverb.</figcaption>
+  </figure>
+  <section>
+    <h2>Start in 5 steps</h2>
+    <ol>
+      <li>Install Rust from <a href="https://rustup.rs">rustup.rs</a>.</li>
+      <li>Get the source: <code>git clone https://github.com/rodbove/riff</code>.</li>
+      <li>In the <code>riff</code> folder, run <code>./scripts/install.sh</code>.</li>
+      <li>Open riff from Applications. Allow microphone access.</li>
+      <li>Click <span class="ui">SETUP</span>, select your audio interface and the input of your guitar.</li>
+    </ol>
+    <p class="tip">The <a href="tutorial.html">tutorial</a> has the full setup, a tour of the screen, tone recipes and a list of all presets.</p>
+  </section>
+  <footer>riff is open source. The amp, pedal and preset names are generic. Band and album names show the style of a tone only.</footer>
+</main>
+</body>
+</html>

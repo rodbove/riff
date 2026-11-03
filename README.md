@@ -2,6 +2,10 @@
 
 riff is a guitar amp and effects app for metal. It plays your guitar from an audio interface through pedals, an amp and a speaker cabinet. It runs as a standalone app and as a VST3 or CLAP plugin.
 
+![riff with the Bat Country Rhythm preset](docs/img/bat-country-rhythm.png)
+
+Read the tutorial at https://rodbove.github.io/riff/tutorial.html.
+
 ## Features
 
 - Six amp models. The names are generic. Each model is like a famous amp:
