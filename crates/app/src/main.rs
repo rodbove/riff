@@ -1,5 +1,6 @@
 mod app;
 mod audio;
+mod desk;
 mod host;
 #[cfg(target_os = "linux")]
 mod jack_audio;
@@ -7,6 +8,7 @@ mod midi;
 mod presets;
 mod settings;
 mod setup;
+mod studio;
 mod take;
 #[path = "../../ui/src/mod.rs"]
 mod ui;

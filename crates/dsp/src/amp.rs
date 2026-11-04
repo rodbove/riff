@@ -84,6 +84,9 @@ struct Power {
     sag: f32,
     presence_hz: f32,
     resonance_hz: f32,
+    thump_db: f32,
+    air_hz: f32,
+    air_db: f32,
 }
 
 pub struct Voicing {
@@ -118,6 +121,9 @@ const CLEAN: Voicing = Voicing {
         sag: 0.1,
         presence_hz: 4000.0,
         resonance_hz: 90.0,
+        thump_db: 3.0,
+        air_hz: 2800.0,
+        air_db: 2.5,
     },
 };
 
@@ -134,9 +140,9 @@ const BRIT: Voicing = Voicing {
     stack: Stack {
         early: false,
         bass_hz: 120.0,
-        mid_hz: 700.0,
-        mid_q: 0.8,
-        scoop_db: -2.0,
+        mid_hz: 620.0,
+        mid_q: 0.65,
+        scoop_db: -11.0,
         treble_hz: 3000.0,
     },
     power: Power {
@@ -144,6 +150,9 @@ const BRIT: Voicing = Voicing {
         sag: 0.2,
         presence_hz: 3500.0,
         resonance_hz: 100.0,
+        thump_db: 4.0,
+        air_hz: 2400.0,
+        air_db: 4.5,
     },
 };
 
@@ -161,9 +170,9 @@ const MARK: Voicing = Voicing {
     stack: Stack {
         early: true,
         bass_hz: 90.0,
-        mid_hz: 500.0,
-        mid_q: 0.8,
-        scoop_db: -1.0,
+        mid_hz: 620.0,
+        mid_q: 0.6,
+        scoop_db: -16.0,
         treble_hz: 2500.0,
     },
     power: Power {
@@ -171,6 +180,9 @@ const MARK: Voicing = Voicing {
         sag: 0.15,
         presence_hz: 4000.0,
         resonance_hz: 80.0,
+        thump_db: 6.0,
+        air_hz: 2200.0,
+        air_db: 5.5,
     },
 };
 
@@ -188,9 +200,9 @@ const RECTO: Voicing = Voicing {
     stack: Stack {
         early: false,
         bass_hz: 110.0,
-        mid_hz: 650.0,
-        mid_q: 0.9,
-        scoop_db: -5.0,
+        mid_hz: 660.0,
+        mid_q: 0.63,
+        scoop_db: -20.0,
         treble_hz: 2800.0,
     },
     power: Power {
@@ -198,6 +210,9 @@ const RECTO: Voicing = Voicing {
         sag: 0.18,
         presence_hz: 3200.0,
         resonance_hz: 85.0,
+        thump_db: 4.4,
+        air_hz: 2200.0,
+        air_db: 6.4,
     },
 };
 
@@ -215,9 +230,9 @@ const BLOCK: Voicing = Voicing {
     stack: Stack {
         early: false,
         bass_hz: 100.0,
-        mid_hz: 800.0,
-        mid_q: 0.9,
-        scoop_db: -1.0,
+        mid_hz: 600.0,
+        mid_q: 0.6,
+        scoop_db: -18.0,
         treble_hz: 3200.0,
     },
     power: Power {
@@ -225,6 +240,9 @@ const BLOCK: Voicing = Voicing {
         sag: 0.2,
         presence_hz: 4500.0,
         resonance_hz: 95.0,
+        thump_db: 5.0,
+        air_hz: 2200.0,
+        air_db: 6.0,
     },
 };
 
@@ -243,9 +261,9 @@ const UBER: Voicing = Voicing {
     stack: Stack {
         early: false,
         bass_hz: 100.0,
-        mid_hz: 1200.0,
-        mid_q: 1.0,
-        scoop_db: 1.0,
+        mid_hz: 620.0,
+        mid_q: 0.6,
+        scoop_db: -18.0,
         treble_hz: 3500.0,
     },
     power: Power {
@@ -253,6 +271,9 @@ const UBER: Voicing = Voicing {
         sag: 0.2,
         presence_hz: 4800.0,
         resonance_hz: 90.0,
+        thump_db: 6.0,
+        air_hz: 2200.0,
+        air_db: 6.0,
     },
 };
 
@@ -355,9 +376,9 @@ impl Amp {
             sag: Follower::new(5.0, 80.0, fast),
             shift_attack: 1.0 - (-1.0 / (SHIFT_ATTACK_MS * 0.001 * fast)).exp(),
             shift_release: 1.0 - (-1.0 / (SHIFT_RELEASE_MS * 0.001 * fast)).exp(),
-            load_low: Biquad::new(Coefs::peak(110.0, 1.1, 3.0, fast)),
-            load_high: Biquad::new(Coefs::high_shelf(2800.0, 2.5, fast)),
-            transformer: Biquad::new(Coefs::lowpass(11000.0, 0.6, fast)),
+            load_low: Biquad::new(Coefs::peak(110.0, 1.1, v.power.thump_db, fast)),
+            load_high: Biquad::new(Coefs::high_shelf(v.power.air_hz, v.power.air_db, fast)),
+            transformer: Biquad::new(Coefs::lowpass(10200.0, 0.6, fast)),
             trim: 1.0,
         };
         for (i, p) in PARAMS.iter().enumerate() {

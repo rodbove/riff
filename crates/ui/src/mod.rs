@@ -48,11 +48,11 @@ pub trait Host {
     fn setup(&mut self) -> bool {
         false
     }
-    fn recording(&self) -> Option<bool> {
+    fn studio(&self) -> Option<bool> {
         None
     }
-    fn toggle_record(&mut self) {}
-    fn reamp(&mut self) {}
+    fn toggle_studio(&mut self) {}
+    fn draw_studio(&mut self, _ui: &mut Ui, _l: &L) {}
 }
 
 #[derive(Default)]
@@ -81,6 +81,11 @@ pub fn draw(ui: &mut Ui, host: &mut dyn Host, view: &mut View) {
     let l = L { o, k };
     header(ui, &l, host, view);
     messages(ui, &l, host);
+    if host.studio() == Some(true) && !view.browser {
+        host.draw_studio(ui, &l);
+        naming(ui.ctx(), host, view);
+        return;
+    }
     let tuning = host.tuner().is_some_and(|t| t.0);
     if tuning {
         tuner(ui, &l, host);
@@ -159,13 +164,11 @@ fn header(ui: &Ui, l: &L, host: &mut dyn Host, view: &mut View) {
     {
         host.toggle_tuner();
     }
-    if let Some(on) = host.recording() {
-        if button(ui, l, "rec", l.r(710.0, 14.0, 44.0, 36.0), "REC", on).clicked() {
-            host.toggle_record();
-        }
-        if button(ui, l, "reamp", l.r(760.0, 14.0, 64.0, 36.0), "REAMP", false).clicked() {
-            host.reamp();
-        }
+    if let Some(on) = host.studio()
+        && button(ui, l, "studio", l.r(710.0, 14.0, 114.0, 36.0), "STUDIO", on).clicked()
+    {
+        view.browser = false;
+        host.toggle_studio();
     }
     let levels = host.levels();
     meter(ui, l, l.r(850.0, 16.0, 72.0, 12.0), levels.input, "IN");

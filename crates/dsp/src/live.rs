@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering};
 
 use rtrb::{Consumer, Producer, RingBuffer};
 
@@ -23,7 +23,10 @@ pub enum Command {
     },
     Mute(bool),
     Record(bool),
+    Play(Option<Track>),
 }
+
+pub type Track = Arc<Vec<[f32; 2]>>;
 
 #[derive(Default)]
 pub struct Meters {
@@ -31,11 +34,16 @@ pub struct Meters {
     output: AtomicU32,
     gate: AtomicBool,
     lost: AtomicU32,
+    played: AtomicUsize,
 }
 
 impl Meters {
     pub fn take_lost(&self) -> u32 {
         self.lost.swap(0, Ordering::Relaxed)
+    }
+
+    pub fn played(&self) -> usize {
+        self.played.load(Ordering::Relaxed)
     }
 
     pub fn read(&self) -> (f32, f32, bool) {
@@ -60,6 +68,9 @@ pub struct Runner {
     recording: bool,
     dry: Producer<f32>,
     wet: Producer<[f32; 2]>,
+    playing: Option<Track>,
+    position: usize,
+    finished: Producer<Track>,
 }
 
 pub struct Remote {
@@ -69,6 +80,7 @@ pub struct Remote {
     pub meters: Arc<Meters>,
     pub dry: Consumer<f32>,
     pub wet: Consumer<[f32; 2]>,
+    pub finished: Consumer<Track>,
 }
 
 impl Remote {
@@ -78,6 +90,7 @@ impl Remote {
 
     pub fn collect(&mut self) {
         while self.trash.pop().is_ok() {}
+        while self.finished.pop().is_ok() {}
     }
 }
 
@@ -89,6 +102,7 @@ pub fn live(chain: Chain) -> (Runner, Remote) {
     let meters = Arc::new(Meters::default());
     let (dp, dc) = RingBuffer::new(rate * RECORD_SECONDS);
     let (wp, wc) = RingBuffer::new(rate * RECORD_SECONDS);
+    let (fp, fc) = RingBuffer::new(TRASH);
     (
         Runner {
             chain: Box::new(chain),
@@ -102,6 +116,9 @@ pub fn live(chain: Chain) -> (Runner, Remote) {
             recording: false,
             dry: dp,
             wet: wp,
+            playing: None,
+            position: 0,
+            finished: fp,
         },
         Remote {
             commands: cp,
@@ -110,6 +127,7 @@ pub fn live(chain: Chain) -> (Runner, Remote) {
             meters,
             dry: dc,
             wet: wc,
+            finished: fc,
         },
     )
 }
@@ -148,6 +166,13 @@ impl Runner {
                 Command::Enable { target, on } => self.chain.enable(target, on),
                 Command::Mute(m) => self.mute = m,
                 Command::Record(on) => self.recording = on,
+                Command::Play(track) => {
+                    if let Some(old) = std::mem::replace(&mut self.playing, track) {
+                        let _ = self.finished.push(old);
+                    }
+                    self.position = 0;
+                    self.meters.played.store(0, Ordering::Relaxed);
+                }
             }
         }
         let mut peak_in = 0.0f32;
@@ -174,6 +199,16 @@ impl Runner {
                 if lost > 0 {
                     self.meters.lost.fetch_add(lost, Ordering::Relaxed);
                 }
+            }
+            if let Some(track) = &self.playing {
+                let from = self.position.min(track.len());
+                let to = (self.position + n).min(track.len());
+                for (o, p) in out.iter_mut().zip(&track[from..to]) {
+                    o[0] += p[0];
+                    o[1] += p[1];
+                }
+                self.position += n;
+                self.meters.played.store(self.position, Ordering::Relaxed);
             }
             for o in out.iter_mut() {
                 if self.mute {
@@ -207,6 +242,32 @@ mod tests {
 
     mod when_running_live {
         use super::*;
+
+        mod with_a_track_playing {
+            use super::*;
+
+            #[test]
+            fn mixes_it_into_the_output_without_allocating() {
+                let silent = Rig {
+                    output: -60.0,
+                    ..Rig::default()
+                };
+                let (mut runner, mut remote) =
+                    live(Chain::build(&silent, RATE, &mut Library::default()));
+                let track: Track = Arc::new(vec![[0.5, -0.5]; 600]);
+                remote.send(Command::Play(Some(track.clone())));
+                let input = vec![0.0f32; 256];
+                let mut out = vec![[0.0f32; 2]; 256];
+                assert_no_alloc(|| runner.process(&input, &mut out));
+                assert!((out[10][0] - 0.5).abs() < 0.01);
+                assert!((out[10][1] + 0.5).abs() < 0.01);
+                assert_eq!(remote.meters.played(), 256);
+                remote.send(Command::Play(None));
+                assert_no_alloc(|| runner.process(&input, &mut out));
+                assert!(out[10][0].abs() < 0.01);
+                assert_eq!(remote.finished.pop().ok().map(|t| t.len()), Some(600));
+            }
+        }
 
         #[test]
         fn processes_and_swaps_without_allocating() {

@@ -122,6 +122,41 @@ If you hear crackles:
 - Click SAVE to save the tone as a user preset. User presets go to `~/Music/riff/presets`. On Linux, riff uses the music folder of your desktop, for example `~/Música/riff/presets`.
 - Click A/B one time to store the current tone as A. Change the tone, then click A/B to switch between the two tones.
 
+## Studio
+
+Click STUDIO to open the multitrack recorder. Click STUDIO again to go back to the amp.
+
+Each take keeps two signals: the dry guitar (DI) and the sound of riff. You can change the tone of a track after you record it.
+
+To record:
+
+1. Click REC on a track header to arm the track.
+2. Click in the timeline to put the playhead where the take starts.
+3. Click the red REC button, or push R. The other tracks play while you record.
+4. Click REC again, or push Space, to stop.
+
+To edit:
+
+- Click a clip to select it. Drag the clip to move it.
+- Drag the left or right edge of a clip to trim it.
+- Click SPLIT, or push S, to cut the selected clip at the playhead.
+- Click DELETE, or push Delete, to remove the selected clip.
+- Click UNDO, or push Ctrl+Z, to undo the last edit.
+- Use M to mute a track and S to solo a track. Drag the VOL bar to set the track volume. Double-click the bar to reset it.
+- Use the mouse wheel to scroll the timeline. Hold Ctrl and use the mouse wheel, or click `-` and `+`, to zoom.
+- Click the ruler to move the playhead. Push Home to go to the start.
+
+Other functions:
+
+- IMPORT puts a WAV file on the armed track at the playhead, for example a backing track or a render from another app.
+- REAMP TRACK plays the DI of the armed track through the current tone and replaces the sound of the track.
+- EXPORT MIX saves all tracks as one stereo WAV file.
+- EXPORT DI saves the dry guitar of the armed track as a mono WAV file. Use this file to reamp in other software.
+
+To compare riff with another amp sim and tune the tone, read [docs/tone-matching.md](docs/tone-matching.md).
+
+riff saves the session in `~/Music/riff/studio` when you close the studio or riff. riff moves each take earlier by the measured latency, so the take lines up with the other tracks.
+
 ## NAM captures and impulse responses
 
 riff does not include captures or IRs. You can download free ones:

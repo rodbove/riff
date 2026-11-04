@@ -64,14 +64,7 @@ impl Host for App {
 
     fn messages(&self) -> Vec<String> {
         let mut out: Vec<String> = self.toast.iter().map(|(t, _)| t.clone()).collect();
-        if let Some(t) = &self.take {
-            let s = t.seconds() as u32;
-            out.push(format!(
-                "RECORDING {}:{:02}  press REC to stop",
-                s / 60,
-                s % 60
-            ));
-        }
+        out.extend(self.studio_status());
         out.extend(self.warnings.iter().cloned());
         if let Some(e) = &self.error {
             out.push(e.clone());
@@ -133,16 +126,16 @@ impl Host for App {
         }
     }
 
-    fn recording(&self) -> Option<bool> {
-        Some(self.take.is_some())
+    fn studio(&self) -> Option<bool> {
+        Some(self.desk.open)
     }
 
-    fn toggle_record(&mut self) {
-        App::toggle_record(self);
+    fn toggle_studio(&mut self) {
+        App::toggle_studio(self);
     }
 
-    fn reamp(&mut self) {
-        App::reamp(self);
+    fn draw_studio(&mut self, ui: &mut crate::egui::Ui, l: &crate::ui::widgets::L) {
+        crate::desk::draw(ui, self, l);
     }
 
     fn setup(&mut self) -> bool {
