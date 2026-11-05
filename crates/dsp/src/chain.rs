@@ -109,6 +109,15 @@ impl Chain {
         self
     }
 
+    pub fn warm(&mut self) {
+        let n = self.amp.fx.warmup() + BLOCK;
+        let silence = vec![0.0; BLOCK];
+        let mut out = vec![[0.0; 2]; BLOCK];
+        for _ in 0..n.div_ceil(BLOCK) {
+            self.process_block(&silence, &mut out);
+        }
+    }
+
     pub fn warnings(&self) -> &[String] {
         &self.warnings
     }

@@ -14,6 +14,7 @@ use crate::take::Take;
 
 const TUNER_WINDOW: usize = 4096;
 const TUNER_EVERY: f64 = 0.08;
+const LOAD_FALL: f32 = 0.98;
 const METER_FALL: f32 = 0.85;
 
 pub struct App {
@@ -35,6 +36,7 @@ pub struct App {
     pub reading: Option<Reading>,
     pub meter_in: f32,
     pub meter_out: f32,
+    pub load: f32,
     pub gate_open: bool,
     pub desk: Desk,
     jobs: (Sender<String>, Receiver<String>),
@@ -65,6 +67,7 @@ impl App {
             reading: None,
             meter_in: 0.0,
             meter_out: 0.0,
+            load: 0.0,
             gate_open: false,
             desk: Desk::default(),
             jobs: channel(),
@@ -200,7 +203,8 @@ impl App {
     pub fn rebuild(&mut self) {
         self.rig.fix();
         if let Some(a) = self.audio.as_mut() {
-            let chain = Chain::build(&self.rig, a.rate as f32, &mut self.library);
+            let mut chain = Chain::build(&self.rig, a.rate as f32, &mut self.library);
+            chain.warm();
             self.warnings = chain.warnings().to_vec();
             a.remote.send(Command::Swap(Box::new(chain)));
         }
@@ -249,6 +253,7 @@ impl App {
         let (i, o, gate) = a.remote.meters.read();
         self.meter_in = i.max(self.meter_in * METER_FALL);
         self.meter_out = o.max(self.meter_out * METER_FALL);
+        self.load = a.remote.meters.take_load().max(self.load * LOAD_FALL);
         self.gate_open = gate;
         while let Ok(v) = a.remote.tap.pop() {
             if self.tap.len() >= TUNER_WINDOW {

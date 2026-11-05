@@ -1,3 +1,4 @@
+use std::f32::consts::FRAC_PI_2;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering};
 
@@ -9,6 +10,7 @@ const COMMANDS: usize = 1024;
 const TRASH: usize = 16;
 const TAP_SECONDS: usize = 1;
 const RECORD_SECONDS: usize = 10;
+const SWAP_MS: f32 = 15.0;
 
 pub enum Command {
     Swap(Box<Chain>),
@@ -35,6 +37,7 @@ pub struct Meters {
     gate: AtomicBool,
     lost: AtomicU32,
     played: AtomicUsize,
+    load: AtomicU32,
 }
 
 impl Meters {
@@ -44,6 +47,10 @@ impl Meters {
 
     pub fn played(&self) -> usize {
         self.played.load(Ordering::Relaxed)
+    }
+
+    pub fn take_load(&self) -> f32 {
+        f32::from_bits(self.load.swap(0, Ordering::Relaxed))
     }
 
     pub fn read(&self) -> (f32, f32, bool) {
@@ -58,6 +65,9 @@ impl Meters {
 
 pub struct Runner {
     chain: Box<Chain>,
+    old: Option<Box<Chain>>,
+    fade: usize,
+    fading: Vec<[f32; 2]>,
     spare: Option<Box<Chain>>,
     commands: Consumer<Command>,
     trash: Producer<Box<Chain>>,
@@ -106,6 +116,9 @@ pub fn live(chain: Chain) -> (Runner, Remote) {
     (
         Runner {
             chain: Box::new(chain),
+            old: None,
+            fade: 0,
+            fading: vec![[0.0; 2]; crate::chain::BLOCK],
             spare: None,
             commands: cc,
             trash: tp,
@@ -143,12 +156,33 @@ impl Runner {
         }
     }
 
+    fn crossfade(&mut self, n: usize, out: &mut [[f32; 2]]) {
+        let Some(old) = self.old.as_mut() else {
+            return;
+        };
+        let total = (SWAP_MS * 0.001 * self.chain.rate()) as usize;
+        old.process_block(&self.scratch[..n], &mut self.fading[..n]);
+        for (o, f) in out.iter_mut().zip(&self.fading[..n]) {
+            let t = (self.fade as f32 / total as f32).min(1.0);
+            let (a, b) = ((t * FRAC_PI_2).sin(), (t * FRAC_PI_2).cos());
+            o[0] = o[0] * a + f[0] * b;
+            o[1] = o[1] * a + f[1] * b;
+            self.fade += 1;
+        }
+        if self.fade >= total
+            && let Some(old) = self.old.take()
+        {
+            self.discard(old);
+        }
+    }
+
     pub fn apply(&mut self, target: Target, param: usize, value: f32) {
         self.chain.set(target, param, value);
     }
 
     pub fn process(&mut self, input: &[f32], out: &mut [[f32; 2]]) {
         let _ftz = crate::denormal::NoDenormals::new();
+        let start = std::time::Instant::now();
         if let Some(old) = self.spare.take() {
             self.discard(old);
         }
@@ -156,7 +190,10 @@ impl Runner {
             match command {
                 Command::Swap(mut chain) => {
                     std::mem::swap(&mut self.chain, &mut chain);
-                    self.discard(chain);
+                    if let Some(older) = self.old.replace(chain) {
+                        self.discard(older);
+                    }
+                    self.fade = 0;
                 }
                 Command::Set {
                     target,
@@ -189,6 +226,7 @@ impl Runner {
                 *s = x;
             }
             self.chain.process_block(&self.scratch[..n], &mut out[..n]);
+            self.crossfade(n, &mut out[..n]);
             if self.recording {
                 let mut lost = 0;
                 for (x, y) in input.iter().zip(out.iter()) {
@@ -221,6 +259,11 @@ impl Runner {
         self.meters.input.fetch_max(peak_in.to_bits(), o);
         self.meters.output.fetch_max(peak_out.to_bits(), o);
         self.meters.gate.store(self.chain.gate_open(), o);
+        if !input.is_empty() {
+            let budget = input.len() as f32 / self.chain.rate();
+            let load = start.elapsed().as_secs_f32() / budget;
+            self.meters.load.fetch_max(load.to_bits(), o);
+        }
     }
 }
 
@@ -294,6 +337,60 @@ mod tests {
             let (peak_in, peak_out, _) = remote.meters.read();
             assert!(peak_in > 0.25);
             assert!(peak_out > 0.0);
+        }
+
+        mod when_a_new_chain_arrives_during_play {
+            use super::*;
+
+            struct Pair {
+                input: Vec<f32>,
+                kept: Vec<[f32; 2]>,
+                swapped: Vec<[f32; 2]>,
+            }
+
+            fn pair() -> Pair {
+                let input: Vec<f32> = (0..9600)
+                    .map(|i| (i as f32 * 220.0 * std::f32::consts::TAU / RATE).sin() * 0.3)
+                    .collect();
+                let build = || live(Chain::build(&rig(), RATE, &mut Library::default()));
+                let ((mut a, _ra), (mut b, mut rb)) = (build(), build());
+                let mut warm = vec![[0.0f32; 2]; 4800];
+                a.process(&input[..4800], &mut warm);
+                b.process(&input[..4800], &mut warm);
+                let mut louder = rig();
+                louder.output += 12.0;
+                let mut chain = Chain::build(&louder, RATE, &mut Library::default());
+                chain.warm();
+                rb.send(Command::Swap(Box::new(chain)));
+                let mut kept = vec![[0.0f32; 2]; 4800];
+                let mut swapped = vec![[0.0f32; 2]; 4800];
+                a.process(&input[4800..], &mut kept);
+                assert_no_alloc(|| b.process(&input[4800..], &mut swapped));
+                Pair {
+                    input,
+                    kept,
+                    swapped,
+                }
+            }
+
+            #[test]
+            fn starts_from_the_old_sound() {
+                let p = pair();
+                assert_eq!(p.input.len(), 9600);
+                let jump = p.kept[..4]
+                    .iter()
+                    .zip(&p.swapped[..4])
+                    .map(|(k, s)| (k[0] - s[0]).abs())
+                    .fold(0.0, f32::max);
+                assert!(jump < 0.02, "jump {jump}");
+            }
+
+            #[test]
+            fn ends_on_the_new_sound() {
+                let p = pair();
+                let peak = |o: &[[f32; 2]]| o.iter().map(|f| f[0].abs()).fold(0.0, f32::max);
+                assert!(peak(&p.swapped[2400..]) > peak(&p.kept[2400..]) * 1.5);
+            }
         }
 
         #[test]

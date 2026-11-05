@@ -53,6 +53,9 @@ pub trait Host {
     }
     fn toggle_studio(&mut self) {}
     fn draw_studio(&mut self, _ui: &mut Ui, _l: &L) {}
+    fn nam_slimmable(&self) -> bool {
+        false
+    }
 }
 
 #[derive(Default)]
@@ -1047,8 +1050,10 @@ fn amp_head(ui: &Ui, l: &L, host: &mut dyn Host) {
         "INPUT",
         look.ink,
     );
-    let params: &[Param] = if use_nam {
+    let params: &[Param] = if use_nam && host.nam_slimmable() {
         nam::PARAMS
+    } else if use_nam {
+        &nam::PARAMS[..nam::QUALITY]
     } else {
         &amp::PARAMS[..7]
     };
@@ -1077,7 +1082,11 @@ fn amp_head(ui: &Ui, l: &L, host: &mut dyn Host) {
             } else {
                 amp.values[i] = nv;
             }
-            host.set(Target::Amp, i, nv);
+            if use_nam && i == nam::QUALITY {
+                host.rebuild();
+            } else {
+                host.set(Target::Amp, i, nv);
+            }
         }
     }
     if !use_nam {

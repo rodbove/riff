@@ -43,6 +43,7 @@ pub struct Settings {
     pub rate: u32,
     pub buffer: u32,
     pub midi: Option<String>,
+    pub fast_cores: bool,
 }
 
 impl Default for Settings {
@@ -55,6 +56,7 @@ impl Default for Settings {
             rate: 48000,
             buffer: 128,
             midi: None,
+            fast_cores: true,
         }
     }
 }

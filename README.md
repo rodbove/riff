@@ -101,11 +101,15 @@ The Linux kernel supports the Scarlett Solo (3rd and 4th gen) directly. You do n
    - Set BUFFER to 128 samples. riff asks PipeWire for this buffer size. When riff closes, PipeWire uses its usual buffer size again.
 4. Click APPLY. The status line shows "realtime" when the audio thread has realtime priority.
 
+The status line also shows DSP: the part of each buffer time that riff uses. Above 50%, crackles can occur. On a CPU with fast and slow cores (for example Intel 12th gen and newer), the status line also shows P-core or E-core. FAST CORES in SETUP keeps the audio on the fast cores. It is on by default.
+
 If you hear crackles:
 
 - Look at the status line. If it shows NOT REALTIME, do steps 1 to 3 of the Linux installation again, then log out and log in.
+- Look at DSP in the status line. If it is above 50%, set QUALITY to LITE on a NAM capture, or remove effects.
+- Set the power profile to performance while you play: `powerprofilesctl set performance`. The `quiet` and `power-saver` profiles keep the CPU slow.
 - Set BUFFER to 256 samples.
-- Run `pw-top` in a terminal. The ERR column shows the dropouts of each program.
+- Run `pw-top` in a terminal. The ERR column shows the dropouts of each program. It must stay at 0 for riff.
 
 ## Use
 
@@ -169,7 +173,8 @@ To use a capture:
 1. Click NAM on the amp. Select the `.nam` file.
 2. Use INPUT to set the drive into the capture, and OUTPUT to set the level.
 3. If the capture includes a cabinet, turn the CAB off.
-4. Most captures are made at 48 kHz. Set RATE to 48000 Hz in SETUP. riff shows a warning if the rates are different.
+4. QUALITY selects the model in an A2 capture. FULL is the best sound. LITE uses approximately 3 times less CPU. The knob shows only for A2 captures.
+5. Most captures are made at 48 kHz. Set RATE to 48000 Hz in SETUP. riff shows a warning if the rates are different.
 
 Right-click NAM to select a different file. Click an amp model to go back to the built-in amps.
 
@@ -190,6 +195,8 @@ The plugin has no AU format. Logic Pro and GarageBand cannot load it. Use Reaper
 Run `cargo test` and `cargo clippy --workspace --all-targets -- -D warnings`.
 
 To measure the CPU use of each factory preset, run `cargo run --release -p riff-dsp --example bench`.
+
+To measure the CPU use of a NAM capture, run `cargo run --release -p riff-dsp --example nam -- <file.nam>`. Read [docs/nam-performance.md](docs/nam-performance.md).
 
 ## License notes
 

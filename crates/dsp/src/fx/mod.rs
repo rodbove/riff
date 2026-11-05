@@ -14,6 +14,10 @@ pub trait Mono: Send {
     fn set(&mut self, param: usize, value: f32);
     fn process(&mut self, x: f32) -> f32;
 
+    fn warmup(&self) -> usize {
+        0
+    }
+
     fn process_block(&mut self, io: &mut [f32]) {
         for s in io {
             *s = self.process(*s);

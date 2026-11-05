@@ -1,5 +1,7 @@
 mod app;
 mod audio;
+#[cfg(target_os = "linux")]
+mod cores;
 mod desk;
 mod host;
 #[cfg(target_os = "linux")]

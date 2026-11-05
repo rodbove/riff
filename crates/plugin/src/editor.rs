@@ -146,10 +146,19 @@ impl Host for Editor {
         if rate <= 0.0 {
             return;
         }
-        let chain = Chain::build(&self.rig, rate, &mut self.library);
+        let mut chain = Chain::build(&self.rig, rate, &mut self.library);
+        chain.warm();
         self.warnings = chain.warnings().to_vec();
         self.send(Command::Swap(Box::new(chain)));
         self.store();
+    }
+
+    fn nam_slimmable(&self) -> bool {
+        self.rig
+            .amp
+            .nam
+            .as_ref()
+            .is_some_and(|p| self.library.nam_slimmable(std::path::Path::new(p)))
     }
 
     fn levels(&self) -> Levels {

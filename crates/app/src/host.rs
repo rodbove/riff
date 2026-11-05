@@ -4,6 +4,7 @@ use riff_dsp::{Rig, Target};
 use crate::app::App;
 use crate::settings;
 use crate::ui::{Host, Levels, Pick};
+const HIGH_LOAD: f32 = 0.6;
 
 impl Host for App {
     fn rig(&mut self) -> &mut Rig {
@@ -69,6 +70,12 @@ impl Host for App {
         if let Some(e) = &self.error {
             out.push(e.clone());
         }
+        if self.load > HIGH_LOAD {
+            out.push(format!(
+                "DSP load is {:.0}%. Above 50%, crackles can occur. Set BUFFER to 256, set QUALITY to LITE on a NAM capture, or read docs/nam-performance.md.",
+                self.load * 100.0
+            ));
+        }
         if self.audio.as_ref().and_then(|a| a.realtime()) == Some(false) {
             out.push(
                 "The audio thread is not realtime, so expect crackles. See the README.".into(),
@@ -104,16 +111,26 @@ impl Host for App {
         App::rebuild(self);
     }
 
+    fn nam_slimmable(&self) -> bool {
+        self.rig
+            .amp
+            .nam
+            .as_ref()
+            .is_some_and(|p| self.library.nam_slimmable(std::path::Path::new(p)))
+    }
+
     fn status(&self) -> String {
         match &self.audio {
             Some(a) => format!(
-                "{} input {}  >  {}   {} Hz   buffer {}   about {:.1} ms   dropouts {}{}   midi {}",
+                "{} input {}  >  {}   {} Hz   buffer {}   about {:.1} ms   DSP {:.0}%{}   dropouts {}{}   midi {}",
                 a.input,
                 a.channel + 1,
                 a.output,
                 a.rate,
                 a.buffer,
                 a.latency_ms,
+                self.load * 100.0,
+                a.core().map(|c| format!(" {c}")).unwrap_or_default(),
                 a.dropouts.load(std::sync::atomic::Ordering::Relaxed),
                 match a.realtime() {
                     Some(true) => "   realtime",

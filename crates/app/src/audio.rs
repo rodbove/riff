@@ -24,6 +24,8 @@ pub struct Audio {
     pub latency_ms: f32,
     pub dropouts: Arc<AtomicU32>,
     pub realtime: Arc<AtomicU8>,
+    pub cpu: Arc<AtomicU32>,
+    pub fast: Vec<usize>,
     pub(crate) _streams: Box<dyn std::any::Any>,
 }
 
@@ -34,6 +36,18 @@ impl Audio {
             REALTIME_NO => Some(false),
             _ => None,
         }
+    }
+
+    pub fn core(&self) -> Option<&'static str> {
+        let cpu = self.cpu.load(Ordering::Relaxed);
+        if self.fast.is_empty() || cpu == u32::MAX {
+            return None;
+        }
+        Some(if self.fast.contains(&(cpu as usize)) {
+            "P-core"
+        } else {
+            "E-core"
+        })
     }
 }
 
@@ -268,6 +282,8 @@ pub fn start(settings: &Settings, build: impl FnOnce(f32) -> Chain) -> Result<Au
         latency_ms,
         dropouts,
         realtime: Arc::new(AtomicU8::new(0)),
+        cpu: Arc::new(AtomicU32::new(u32::MAX)),
+        fast: Vec::new(),
         _streams: Box::new((input, output)),
     })
 }

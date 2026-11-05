@@ -1,7 +1,7 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use nam_rs::{Model, NamModel};
+use nam_rs::{Model, ModelConfig, NamModel};
 
 use crate::biquad::{Biquad, Coefs};
 use crate::fx::Mono;
@@ -17,7 +17,10 @@ pub const PARAMS: &[Param] = &[
     Param::knob("BASS", 5.0),
     Param::knob("MID", 5.0),
     Param::knob("TREBLE", 5.0),
+    Param::choice("QUALITY", &["FULL", "LITE"], 0.0),
 ];
+
+pub const QUALITY: usize = 5;
 
 pub struct Capture {
     pub name: String,
@@ -34,6 +37,12 @@ impl Library {
         let model = Arc::new(NamModel::from_file(path).map_err(|e| e.to_string())?);
         self.nams.insert(path.to_path_buf(), model.clone());
         Ok(model)
+    }
+
+    pub fn nam_slimmable(&self, path: &Path) -> bool {
+        self.nams
+            .get(path)
+            .is_some_and(|m| matches!(m.config, ModelConfig::Slimmable(_)))
     }
 }
 
@@ -125,10 +134,19 @@ impl Mono for NamAmp {
             1 => self.output.set(db(value)),
             2 => self.bass.set(Coefs::low_shelf(120.0, k * 12.0, self.rate)),
             3 => self.mid.set(Coefs::peak(700.0, 0.8, k * 10.0, self.rate)),
+            QUALITY => {
+                if let Some(s) = self.model.as_slimmable_mut() {
+                    s.select(if value >= 0.5 { 0 } else { s.len() - 1 });
+                }
+            }
             _ => self
                 .treble
                 .set(Coefs::high_shelf(3000.0, k * 12.0, self.rate)),
         }
+    }
+
+    fn warmup(&self) -> usize {
+        self.model.receptive_field()
     }
 
     fn process(&mut self, x: f32) -> f32 {
@@ -189,6 +207,64 @@ mod tests {
             NamAmp::new(&path, &[], 44100.0, &mut lib, &mut warnings).unwrap();
             assert_eq!(warnings.len(), 1);
             assert!(warnings[0].contains("48000"));
+        }
+
+        mod with_an_a2_capture {
+            use super::*;
+
+            fn a2() -> std::path::PathBuf {
+                let small = TINY_LSTM.replace("2.0,0.0", "0.5,0.0");
+                let json = format!(
+                    r#"{{"version":"0.7.0","architecture":"SlimmableContainer","sample_rate":48000,
+                    "config":{{"submodels":[{{"max_value":0.5,"model":{small}}},{{"max_value":1.0,"model":{TINY_LSTM}}}]}},
+                    "weights":[],"metadata":{{"name":"a2"}}}}"#
+                );
+                let path = fixture("a2").with_file_name("a2.nam");
+                std::fs::write(&path, json).unwrap();
+                path
+            }
+
+            #[test]
+            fn is_slimmable() {
+                let path = a2();
+                let mut lib = Library::default();
+                NamAmp::new(&path, &[], 48000.0, &mut lib, &mut Vec::new()).unwrap();
+                assert!(lib.nam_slimmable(&path));
+            }
+
+            #[test]
+            fn runs_the_small_model_on_lite() {
+                let path = a2();
+                let mut lib = Library::default();
+                let mut full = NamAmp::new(&path, &[], 48000.0, &mut lib, &mut Vec::new()).unwrap();
+                let mut values: Vec<f32> = PARAMS.iter().map(|p| p.default).collect();
+                values[QUALITY] = 1.0;
+                let mut lite = NamAmp::new(&path, &values, 48000.0, &mut lib, &mut Vec::new()).unwrap();
+                let (f, l) = (full.process(0.5), lite.process(0.5));
+                assert!((f - l).abs() > 1e-3, "full {f} lite {l}");
+            }
+        }
+
+        mod with_a_capture_without_submodels {
+            use super::*;
+
+            #[test]
+            fn is_not_slimmable() {
+                let path = fixture("slim");
+                let mut lib = Library::default();
+                NamAmp::new(&path, &[], 48000.0, &mut lib, &mut Vec::new()).unwrap();
+                assert!(!lib.nam_slimmable(&path));
+            }
+
+            #[test]
+            fn ignores_the_quality_setting() {
+                let path = fixture("quality");
+                let mut lib = Library::default();
+                let mut amp = NamAmp::new(&path, &[], 48000.0, &mut lib, &mut Vec::new()).unwrap();
+                let full = amp.process(0.5);
+                amp.set(QUALITY, 1.0);
+                assert!(amp.process(0.5).is_finite() && full.is_finite());
+            }
         }
 
         #[test]

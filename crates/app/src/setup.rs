@@ -109,6 +109,11 @@ pub fn window(app: &mut App, ctx: &egui::Context) {
                         }
                     });
                 ui.end_row();
+                if s.backend == Backend::Jack {
+                    ui.label("FAST CORES");
+                    ui.checkbox(&mut s.fast_cores, "run audio on the fastest cores");
+                    ui.end_row();
+                }
             });
             ui.label("Scarlett Solo: the guitar jack (INST) is input 2.");
             if let Some(e) = &app.error {

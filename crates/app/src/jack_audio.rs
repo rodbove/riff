@@ -88,6 +88,8 @@ struct Process {
     right: jack::Port<AudioOut>,
     output: Vec<[f32; 2]>,
     realtime: Arc<AtomicU8>,
+    cpu: Arc<AtomicU32>,
+    fast: Vec<usize>,
 }
 
 impl jack::ProcessHandler for Process {
@@ -98,7 +100,9 @@ impl jack::ProcessHandler for Process {
             let rt = policy == libc::SCHED_FIFO || policy == libc::SCHED_RR;
             let flag = if rt { REALTIME_YES } else { REALTIME_NO };
             self.realtime.store(flag, Ordering::Relaxed);
+            crate::cores::pin(&self.fast);
         }
+        self.cpu.store(crate::cores::current(), Ordering::Relaxed);
         let input = self.input.as_slice(ps);
         let left = self.left.as_mut_slice(ps);
         let right = self.right.as_mut_slice(ps);
@@ -187,6 +191,8 @@ pub fn start(settings: &Settings, build: impl FnOnce(f32) -> Chain) -> Result<Au
     let (runner, remote) = live(build(rate as f32));
     let dropouts = Arc::new(AtomicU32::new(0));
     let realtime = Arc::new(AtomicU8::new(0));
+    let cpu = Arc::new(AtomicU32::new(crate::cores::UNKNOWN));
+    let fast = crate::cores::fast_cores();
     let process = Process {
         runner,
         input,
@@ -194,6 +200,12 @@ pub fn start(settings: &Settings, build: impl FnOnce(f32) -> Chain) -> Result<Au
         right,
         output: vec![[0.0; 2]; SCRATCH],
         realtime: realtime.clone(),
+        cpu: cpu.clone(),
+        fast: if settings.fast_cores {
+            fast.clone()
+        } else {
+            Vec::new()
+        },
     };
     let notify = Notify {
         dropouts: dropouts.clone(),
@@ -226,6 +238,8 @@ pub fn start(settings: &Settings, build: impl FnOnce(f32) -> Chain) -> Result<Au
         latency_ms: frames as f32 / rate as f32 * 1000.0,
         dropouts,
         realtime,
+        cpu,
+        fast,
         _streams: Box::new(active),
     })
 }
