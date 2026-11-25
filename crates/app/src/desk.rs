@@ -462,7 +462,9 @@ pub fn draw(ui: &mut Ui, app: &mut App, l: &L) {
         .map(|s| s.tracks.len())
         .unwrap_or(0);
     for t in 0..count {
-        track_head(ui, app, l, t);
+        if !track_head(ui, app, l, t) {
+            break;
+        }
         lane(ui, app, &map, t);
     }
     if count < MAX_TRACKS {
@@ -686,7 +688,7 @@ fn ruler(ui: &Ui, app: &mut App, map: &Map) {
     }
 }
 
-fn track_head(ui: &Ui, app: &mut App, l: &L, t: usize) {
+fn track_head(ui: &Ui, app: &mut App, l: &L, t: usize) -> bool {
     let y = LANES + t as f32 * LANE;
     let rect = l.r(HEAD, y, HEAD_W, LANE - 4.0);
     let armed = app.desk.armed == t;
@@ -697,7 +699,7 @@ fn track_head(ui: &Ui, app: &mut App, l: &L, t: usize) {
         if armed { mix(TOLEX, RED, 0.12) } else { TOLEX },
     );
     let Some(s) = app.desk.session.as_mut() else {
-        return;
+        return false;
     };
     let audible = s.audible(t);
     let tr = &mut s.tracks[t];
@@ -713,7 +715,7 @@ fn track_head(ui: &Ui, app: &mut App, l: &L, t: usize) {
         app.desk.armed = t;
     }
     let Some(s) = app.desk.session.as_mut() else {
-        return;
+        return false;
     };
     if button(ui, l, ("mute", t), small(44.0, 26.0), "M", s.tracks[t].mute).clicked() {
         s.remember();
@@ -729,7 +731,8 @@ fn track_head(ui: &Ui, app: &mut App, l: &L, t: usize) {
             app.desk.armed = s.tracks.len().saturating_sub(1);
         }
         app.desk.selected = None;
-        return;
+        app.desk.drag = None;
+        return false;
     }
     let vol = l.r(HEAD + 6.0, y + 50.0, HEAD_W - 12.0, 14.0);
     let resp = ui.interact(vol, Id::NULL.with(("volume", t)), Sense::click_and_drag());
@@ -758,6 +761,7 @@ fn track_head(ui: &Ui, app: &mut App, l: &L, t: usize) {
         l.f(8.0),
         INK,
     );
+    true
 }
 
 fn lane(ui: &Ui, app: &mut App, map: &Map, t: usize) {
